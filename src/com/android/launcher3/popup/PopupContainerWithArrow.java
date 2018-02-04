@@ -46,6 +46,7 @@ import com.android.launcher3.DragSource;
 import com.android.launcher3.DropTarget;
 import com.android.launcher3.DropTarget.DragObject;
 import com.android.launcher3.Launcher;
+import com.android.launcher3.LauncherPrefs;
 import com.android.launcher3.R;
 import com.android.launcher3.accessibility.LauncherAccessibilityDelegate;
 import com.android.launcher3.accessibility.ShortcutMenuAccessibilityDelegate;
@@ -592,6 +593,8 @@ public class PopupContainerWithArrow<T extends Context & ActivityContext>
             if (!ItemLongClickListener.canStartDrag(mLauncher)) return false;
             // Return early if not the correct view
             if (!(v.getParent() instanceof DeepShortcutView)) return false;
+            // Return early if workspace edit is disabled
+            if (!LauncherPrefs.isWorkspaceEditAllowed(mLauncher.getApplicationContext())) return false;
 
             // Long clicked on a shortcut.
             DeepShortcutView sv = (DeepShortcutView) v.getParent();

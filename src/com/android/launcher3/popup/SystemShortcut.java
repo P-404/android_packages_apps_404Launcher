@@ -17,6 +17,7 @@ import androidx.annotation.Nullable;
 import com.android.launcher3.AbstractFloatingView;
 import com.android.launcher3.BaseDraggingActivity;
 import com.android.launcher3.Launcher;
+import com.android.launcher3.LauncherPrefs;
 import com.android.launcher3.R;
 import com.android.launcher3.Utilities;
 import com.android.launcher3.model.WidgetItem;
@@ -133,6 +134,7 @@ public abstract class SystemShortcut<T extends Context & ActivityContext> extend
 
         @Override
         public void onClick(View view) {
+            if (!LauncherPrefs.isWorkspaceEditAllowed(mTarget.getApplicationContext())) return;
             AbstractFloatingView.closeAllOpenViews(mTarget);
             WidgetsBottomSheet widgetsBottomSheet =
                     (WidgetsBottomSheet) mTarget.getLayoutInflater().inflate(

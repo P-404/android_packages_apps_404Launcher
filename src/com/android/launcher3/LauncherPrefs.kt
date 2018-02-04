@@ -17,4 +17,10 @@ object LauncherPrefs {
         // Use application context for shared preferences, so that we use a single cached instance
         return context.applicationContext.getSharedPreferences(
                 LauncherFiles.DEVICE_PREFERENCES_KEY, Context.MODE_PRIVATE)
+    }
+
+    @JvmStatic
+    fun isWorkspaceEditAllowed(context: Context): Boolean {
+        var prefs = getPrefs(context.getApplicationContext())
+        return !prefs.getBoolean(InvariantDeviceProfile.KEY_WORKSPACE_LOCK, false)
     }}
