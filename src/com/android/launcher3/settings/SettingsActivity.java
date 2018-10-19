@@ -185,6 +185,14 @@ public class SettingsActivity extends Activity
             getPreferenceManager().setSharedPreferencesName(LauncherFiles.SHARED_PREFERENCES_KEY);
             setPreferencesFromResource(R.xml.launcher_preferences, rootKey);
 
+            HomeKeyWatcher mHomeKeyListener = new HomeKeyWatcher(getActivity());
+            mHomeKeyListener.setOnHomePressedListener(() -> {
+                if (restartNeeded) {
+                    Utilities.restart(getActivity());
+                }
+            });
+            mHomeKeyListener.startWatch();
+
             PreferenceScreen screen = getPreferenceScreen();
             for (int i = screen.getPreferenceCount() - 1; i >= 0; i--) {
                 Preference preference = screen.getPreference(i);
@@ -362,6 +370,9 @@ public class SettingsActivity extends Activity
                 mNotificationDotsObserver = null;
             }
             super.onDestroy();
+            if (restartNeeded) {
+                Utilities.restart(getActivity());
+            }
         }
     }
 }
