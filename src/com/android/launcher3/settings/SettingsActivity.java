@@ -185,14 +185,6 @@ public class SettingsActivity extends Activity
             getPreferenceManager().setSharedPreferencesName(LauncherFiles.SHARED_PREFERENCES_KEY);
             setPreferencesFromResource(R.xml.launcher_preferences, rootKey);
 
-            HomeKeyWatcher mHomeKeyListener = new HomeKeyWatcher(getActivity());
-            mHomeKeyListener.setOnHomePressedListener(() -> {
-                if (restartNeeded) {
-                    Utilities.restart(getActivity());
-                }
-            });
-            mHomeKeyListener.startWatch();
-
             PreferenceScreen screen = getPreferenceScreen();
             for (int i = screen.getPreferenceCount() - 1; i >= 0; i--) {
                 Preference preference = screen.getPreference(i);
@@ -369,10 +361,10 @@ public class SettingsActivity extends Activity
                 mNotificationDotsObserver.unregister();
                 mNotificationDotsObserver = null;
             }
+            // if we don't press the home button but the back button to close Settings,
+            // then we must force a restart because the home button watcher wouldn't trigger it
+            LauncherAppState.getInstanceNoCreate().checkIfRestartNeeded();
             super.onDestroy();
-            if (restartNeeded) {
-                Utilities.restart(getActivity());
-            }
         }
     }
 }
