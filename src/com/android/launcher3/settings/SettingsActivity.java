@@ -63,6 +63,8 @@ import com.android.launcher3.uioverrides.plugins.PluginManagerWrapper;
 
 import com.android.settingslib.collapsingtoolbar.CollapsingToolbarBaseActivity;
 
+import com.android.launcher3.lineage.LineageUtils;
+import com.android.launcher3.lineage.trust.TrustAppsActivity;
 import java.util.Collections;
 import java.util.List;
 
@@ -88,6 +90,8 @@ public class SettingsActivity extends CollapsingToolbarBaseActivity
     public static final String EXTRA_SHOW_FRAGMENT_ARGS = ":settings:show_fragment_args";
     private static final int DELAY_HIGHLIGHT_DURATION_MILLIS = 600;
     public static final String SAVE_HIGHLIGHTED_KEY = "android:preference_highlighted";
+
+    public static final String KEY_TRUST_APPS = "pref_trust_apps";
 
     @VisibleForTesting
     static final String EXTRA_FRAGMENT = ":settings:fragment";
@@ -321,6 +325,18 @@ public class SettingsActivity extends CollapsingToolbarBaseActivity
                 case DEVELOPER_OPTIONS_KEY:
                     mDeveloperOptionPref = preference;
                     return updateDeveloperOption();
+
+
+                case KEY_TRUST_APPS:
+                    preference.setOnPreferenceClickListener(p -> {
+                        LineageUtils.showLockScreen(getActivity(),
+                                getString(R.string.trust_apps_manager_name), () -> {
+                            Intent intent = new Intent(getActivity(), TrustAppsActivity.class);
+                            startActivity(intent);
+                        });
+                        return true;
+                    });
+                    return true;
 
                 case KEY_ENABLE_MINUS_ONE:
                     mShowGoogleAppPref = preference;
