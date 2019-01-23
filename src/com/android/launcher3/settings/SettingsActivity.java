@@ -67,6 +67,8 @@ import com.android.launcher3.uioverrides.plugins.PluginManagerWrapper;
 
 import com.android.settingslib.collapsingtoolbar.CollapsingToolbarBaseActivity;
 
+import com.android.launcher3.p404.P404Utils;
+import com.android.launcher3.p404.trust.TrustAppsActivity;
 import java.util.Collections;
 import java.util.List;
 
@@ -94,6 +96,8 @@ public class SettingsActivity extends CollapsingToolbarBaseActivity
     public static final String SAVE_HIGHLIGHTED_KEY = "android:preference_highlighted";
 
     private static final String KEY_SUGGESTIONS = "pref_suggestions";
+
+    public static final String KEY_TRUST_APPS = "pref_trust_apps";
 
     @VisibleForTesting
     static final String EXTRA_FRAGMENT = ":settings:fragment";
@@ -339,6 +343,18 @@ public class SettingsActivity extends CollapsingToolbarBaseActivity
                     mDeveloperOptionPref = preference;
                     mDeveloperOptionPrefGroup = group;
                     return updateDeveloperOption();
+
+
+                case KEY_TRUST_APPS:
+                    preference.setOnPreferenceClickListener(p -> {
+                        P404Utils.showLockScreen(getActivity(),
+                                getString(R.string.trust_apps_manager_name), () -> {
+                            Intent intent = new Intent(getActivity(), TrustAppsActivity.class);
+                            startActivity(intent);
+                        });
+                        return true;
+                    });
+                    return true;
 
                 case KEY_ENABLE_MINUS_ONE:
                     preference.setEnabled(isGsaEnabled());
