@@ -23,6 +23,10 @@
         android:key="pref_icon_pack"
         android:title="@string/icon_pack_title" />
 
+	<Preference
+        android:key="pref_trust_apps"
+        android:title="@string/trust_apps_manager_name" />
+    
     <PreferenceCategory
         android:key="icon_category"
         android:title="@string/icon_category_title">
