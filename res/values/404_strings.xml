@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Folder titles -->
+    <string name="google_folder_title" translatable="false">Google</string>
+</resources>
