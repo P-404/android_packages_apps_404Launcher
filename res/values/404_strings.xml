@@ -32,6 +32,7 @@
     <!-- Hide labels -->
     <string name="desktop_show_labels">Show icon labels on desktop</string>
     <string name="drawer_show_labels">Show icon labels in drawer</string>
+    <string name="show_labels_landscape">Show icon labels in landscape mode</string>
 
     <!-- Edit workspace -->
     <string name="settings_edit_allow_title">Allow edit</string>
