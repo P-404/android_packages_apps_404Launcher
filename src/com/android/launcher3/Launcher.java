@@ -273,6 +273,7 @@ public class Launcher extends BaseDraggingActivity implements LauncherExterns,
 
     // UI and state for the overview panel
     private View mOverviewPanel;
+    private View mActionsView;
 
     @Thunk
     boolean mWorkspaceLoading = true;
@@ -482,7 +483,6 @@ public class Launcher extends BaseDraggingActivity implements LauncherExterns,
     @Override
     public void onEnterAnimationComplete() {
         super.onEnterAnimationComplete();
-        mAllAppsController.highlightWorkTabIfNecessary();
         mRotationHelper.setCurrentTransitionRequest(REQUEST_NONE);
     }
 
@@ -833,6 +833,7 @@ public class Launcher extends BaseDraggingActivity implements LauncherExterns,
                         ON_ACTIVITY_RESULT_ANIMATION_DELAY, false);
             }
         }
+
         mDragLayer.clearAnimatedView();
     }
 
@@ -1162,6 +1163,7 @@ public class Launcher extends BaseDraggingActivity implements LauncherExterns,
         mWorkspace = mDragLayer.findViewById(R.id.workspace);
         mWorkspace.initParentViews(mDragLayer);
         mOverviewPanel = findViewById(R.id.overview_panel);
+        mActionsView = findViewById(R.id.overview_actions_view);
         mHotseat = findViewById(R.id.hotseat);
 
         mLauncherView.setSystemUiVisibility(View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
@@ -1361,7 +1363,7 @@ public class Launcher extends BaseDraggingActivity implements LauncherExterns,
 
     protected void onUiChangedWhileSleeping() { }
 
-    public void updateNotificationDots(Predicate<PackageUserKey> updatedDots) {
+    private void updateNotificationDots(Predicate<PackageUserKey> updatedDots) {
         mWorkspace.updateNotificationDots(updatedDots);
         mAppsView.getAppsStore().updateNotificationDots(updatedDots);
     }
@@ -1407,6 +1409,10 @@ public class Launcher extends BaseDraggingActivity implements LauncherExterns,
 
     public <T extends View> T getOverviewPanel() {
         return (T) mOverviewPanel;
+    }
+
+    public View getActionsView() {
+        return mActionsView;
     }
 
     public DropTargetBar getDropTargetBar() {
@@ -1460,7 +1466,7 @@ public class Launcher extends BaseDraggingActivity implements LauncherExterns,
         if (isActionMain) {
             if (!internalStateHandled) {
                 // In all these cases, only animate if we're already on home
-                AbstractFloatingView.closeAllOpenViews(this, isStarted());
+                closeOpenViews(isStarted());
 
                 if (!isInState(NORMAL)) {
                     // Only change state, if not already the same. This prevents cancelling any
@@ -2201,7 +2207,7 @@ public class Launcher extends BaseDraggingActivity implements LauncherExterns,
                 mWorkspace.postDelayed(new Runnable() {
                     public void run() {
                         if (mWorkspace != null) {
-                            AbstractFloatingView.closeAllOpenViews(Launcher.this, false);
+                            closeOpenViews(false);
 
                             mWorkspace.snapToPage(newScreenIndex);
                             mWorkspace.postDelayed(startBounceAnimRunnable,
@@ -2321,6 +2327,13 @@ public class Launcher extends BaseDraggingActivity implements LauncherExterns,
                     item.restoreStatus = LauncherAppWidgetInfo.RESTORE_COMPLETED;
                     getModelWriter().updateItemInDatabase(item);
                 }
+                else if (item.hasRestoreFlag(LauncherAppWidgetInfo.FLAG_UI_NOT_READY)
+                        && appWidgetInfo.configure != null) {
+                    if (mAppWidgetManager.isAppWidgetRestored(item.appWidgetId)) {
+                        item.restoreStatus = LauncherAppWidgetInfo.RESTORE_COMPLETED;
+                        getModelWriter().updateItemInDatabase(item);
+                    }
+                }
             }
 
             if (item.restoreStatus == LauncherAppWidgetInfo.RESTORE_COMPLETED) {
@@ -2333,6 +2346,11 @@ public class Launcher extends BaseDraggingActivity implements LauncherExterns,
 
                 item.minSpanX = appWidgetInfo.minSpanX;
                 item.minSpanY = appWidgetInfo.minSpanY;
+                view = mAppWidgetHost.createView(this, item.appWidgetId, appWidgetInfo);
+            } else if (!item.hasRestoreFlag(LauncherAppWidgetInfo.FLAG_ID_NOT_VALID)
+                    && appWidgetInfo != null) {
+                mAppWidgetHost.addPendingView(item.appWidgetId,
+                        new PendingAppWidgetHostView(this, item, mIconCache, false));
                 view = mAppWidgetHost.createView(this, item.appWidgetId, appWidgetInfo);
             } else {
                 view = new PendingAppWidgetHostView(this, item, mIconCache, false);
@@ -2677,7 +2695,7 @@ public class Launcher extends BaseDraggingActivity implements LauncherExterns,
             if (!mDragController.isDragging() && !mWorkspace.isSwitchingState() &&
                     isInState(NORMAL)) {
                 // Close any open floating views.
-                AbstractFloatingView.closeAllOpenViews(this);
+                closeOpenViews();
 
                 // Setting the touch point to (-1, -1) will show the options popup in the center of
                 // the screen.
@@ -2715,6 +2733,14 @@ public class Launcher extends BaseDraggingActivity implements LauncherExterns,
     public void returnToHomescreen() {
         super.returnToHomescreen();
         getStateManager().goToState(LauncherState.NORMAL);
+    }
+
+    private void closeOpenViews() {
+        closeOpenViews(true);
+    }
+
+    protected void closeOpenViews(boolean animate) {
+        AbstractFloatingView.closeAllOpenViews(this, animate);
     }
 
     public Stream<SystemShortcut.Factory> getSupportedShortcuts() {

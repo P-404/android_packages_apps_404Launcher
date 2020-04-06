@@ -56,6 +56,7 @@ public class SecondaryDropTarget extends ButtonDropTarget implements OnAlarmList
     private final ArrayMap<UserHandle, Boolean> mUninstallDisabledCache = new ArrayMap<>(1);
 
     private final Alarm mCacheExpireAlarm;
+    private boolean mHadPendingAlarm;
 
     protected int mCurrentAccessibilityAction = -1;
     public SecondaryDropTarget(Context context, AttributeSet attrs) {
@@ -66,7 +67,26 @@ public class SecondaryDropTarget extends ButtonDropTarget implements OnAlarmList
         super(context, attrs, defStyle);
 
         mCacheExpireAlarm = new Alarm();
-        mCacheExpireAlarm.setOnAlarmListener(this);
+    }
+
+    @Override
+    protected void onAttachedToWindow() {
+        super.onAttachedToWindow();
+        if (mHadPendingAlarm) {
+            mCacheExpireAlarm.setAlarm(CACHE_EXPIRE_TIMEOUT);
+            mCacheExpireAlarm.setOnAlarmListener(this);
+            mHadPendingAlarm = false;
+        }
+    }
+
+    @Override
+    protected void onDetachedFromWindow() {
+        super.onDetachedFromWindow();
+        if (mCacheExpireAlarm.alarmPending()) {
+            mCacheExpireAlarm.cancelAlarm();
+            mCacheExpireAlarm.setOnAlarmListener(null);
+            mHadPendingAlarm = true;
+        }
     }
 
     @Override
@@ -149,6 +169,7 @@ public class SecondaryDropTarget extends ButtonDropTarget implements OnAlarmList
         }
         // Cancel any pending alarm and set cache expiry after some time
         mCacheExpireAlarm.setAlarm(CACHE_EXPIRE_TIMEOUT);
+        mCacheExpireAlarm.setOnAlarmListener(this);
         if (uninstallDisabled) {
             return false;
         }

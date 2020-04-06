@@ -2,6 +2,7 @@ package com.android.launcher3.allapps;
 
 import static com.android.launcher3.LauncherState.ALL_APPS_CONTENT;
 import static com.android.launcher3.LauncherState.ALL_APPS_HEADER_EXTRA;
+import static com.android.launcher3.LauncherState.APPS_VIEW_ITEM_MASK;
 import static com.android.launcher3.LauncherState.OVERVIEW;
 import static com.android.launcher3.LauncherState.VERTICAL_SWIPE_INDICATOR;
 import static com.android.launcher3.anim.AnimatorSetBuilder.ANIM_ALL_APPS_FADE;
@@ -31,8 +32,10 @@ import com.android.launcher3.anim.AnimationSuccessListener;
 import com.android.launcher3.anim.AnimatorSetBuilder;
 import com.android.launcher3.anim.PropertySetter;
 import com.android.launcher3.anim.SpringObjectAnimator;
+import com.android.launcher3.util.DynamicResource;
 import com.android.launcher3.util.Themes;
 import com.android.launcher3.views.ScrimView;
+import com.android.systemui.plugins.ResourceProvider;
 
 /**
  * Handles AllApps view transition.
@@ -45,9 +48,6 @@ import com.android.launcher3.views.ScrimView;
  * closer to top or closer to the page indicator.
  */
 public class AllAppsTransitionController implements StateHandler, OnDeviceProfileChangeListener {
-
-    private static final float SPRING_DAMPING_RATIO = 0.75f;
-    private static final float SPRING_STIFFNESS = 600f;
 
     public static final FloatProperty<AllAppsTransitionController> ALL_APPS_PROGRESS =
             new FloatProperty<AllAppsTransitionController>("allAppsProgress") {
@@ -186,8 +186,12 @@ public class AllAppsTransitionController implements StateHandler, OnDeviceProfil
 
     public Animator createSpringAnimation(float... progressValues) {
         if (UNSTABLE_SPRINGS.get()) {
+            ResourceProvider rp = DynamicResource.provider(mLauncher);
+            float damping = rp.getFloat(R.dimen.all_apps_spring_damping_ratio);
+            float stiffness = rp.getFloat(R.dimen.all_apps_spring_stiffness);
+
             return new SpringObjectAnimator<>(this, ALL_APPS_PROGRESS, 1f / mShiftRange,
-                    SPRING_DAMPING_RATIO, SPRING_STIFFNESS, progressValues);
+                    damping, stiffness, progressValues);
         }
         return ObjectAnimator.ofFloat(this, ALL_APPS_PROGRESS, progressValues);
     }
@@ -203,6 +207,8 @@ public class AllAppsTransitionController implements StateHandler, OnDeviceProfil
         boolean hasHeaderExtra = (visibleElements & ALL_APPS_HEADER_EXTRA) != 0;
         boolean hasAllAppsContent = (visibleElements & ALL_APPS_CONTENT) != 0;
 
+        boolean hasAnyVisibleItem = (visibleElements & APPS_VIEW_ITEM_MASK) != 0;
+
         Interpolator allAppsFade = builder.getInterpolator(ANIM_ALL_APPS_FADE, LINEAR);
         Interpolator headerFade = builder.getInterpolator(ANIM_ALL_APPS_HEADER_FADE, allAppsFade);
         setter.setViewAlpha(mAppsView.getContentView(), hasAllAppsContent ? 1 : 0, allAppsFade);
@@ -213,6 +219,8 @@ public class AllAppsTransitionController implements StateHandler, OnDeviceProfil
 
         setter.setInt(mScrimView, ScrimView.DRAG_HANDLE_ALPHA,
                 (visibleElements & VERTICAL_SWIPE_INDICATOR) != 0 ? 255 : 0, allAppsFade);
+
+        setter.setViewAlpha(mAppsView, hasAnyVisibleItem ? 1 : 0, allAppsFade);
     }
 
     public AnimatorListenerAdapter getProgressAnimatorListener() {
@@ -248,18 +256,6 @@ public class AllAppsTransitionController implements StateHandler, OnDeviceProfil
     private void onProgressAnimationEnd() {
         if (Float.compare(mProgress, 1f) == 0) {
             mAppsView.reset(false /* animate */);
-        } else if (isAllAppsExpanded()) {
-            mAppsView.onScrollUpEnd();
-        }
-    }
-
-    private boolean isAllAppsExpanded() {
-        return Float.compare(mProgress, 0f) == 0;
-    }
-
-    public void highlightWorkTabIfNecessary() {
-        if (isAllAppsExpanded()) {
-            mAppsView.highlightWorkTabIfNecessary();
         }
     }
 }

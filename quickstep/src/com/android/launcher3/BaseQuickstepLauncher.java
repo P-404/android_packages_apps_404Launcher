@@ -26,6 +26,7 @@ import static com.android.launcher3.allapps.DiscoveryBounce.HOME_BOUNCE_SEEN;
 import static com.android.launcher3.allapps.DiscoveryBounce.SHELF_BOUNCE_COUNT;
 import static com.android.launcher3.allapps.DiscoveryBounce.SHELF_BOUNCE_SEEN;
 import static com.android.quickstep.SysUINavigationMode.removeShelfFromOverview;
+import static com.android.systemui.shared.system.ActivityManagerWrapper.CLOSE_SYSTEM_WINDOWS_REASON_HOME_KEY;
 
 import android.animation.AnimatorSet;
 import android.animation.ValueAnimator;
@@ -36,11 +37,13 @@ import android.os.CancellationSignal;
 
 import com.android.launcher3.LauncherState.ScaleAndTranslation;
 import com.android.launcher3.LauncherStateManager.StateHandler;
+import com.android.launcher3.accessibility.SystemActions;
 import com.android.launcher3.config.FeatureFlags;
 import com.android.launcher3.model.WellbeingModel;
 import com.android.launcher3.popup.SystemShortcut;
 import com.android.launcher3.proxy.ProxyActivityStarter;
 import com.android.launcher3.proxy.StartActivityParams;
+import com.android.launcher3.touch.PagedOrientationHandler;
 import com.android.launcher3.uioverrides.BackButtonAlphaHandler;
 import com.android.launcher3.uioverrides.RecentsViewStateController;
 import com.android.launcher3.util.UiThreadHelper;
@@ -51,6 +54,7 @@ import com.android.quickstep.SysUINavigationMode.NavigationModeChangeListener;
 import com.android.quickstep.SystemUiProxy;
 import com.android.quickstep.util.RemoteFadeOutAnimationListener;
 import com.android.quickstep.util.ShelfPeekAnim;
+import com.android.quickstep.views.RecentsView;
 import com.android.systemui.shared.system.ActivityManagerWrapper;
 
 import java.util.stream.Stream;
@@ -60,6 +64,8 @@ import java.util.stream.Stream;
  */
 public abstract class BaseQuickstepLauncher extends Launcher
         implements NavigationModeChangeListener {
+
+    protected SystemActions mSystemActions;
 
     /**
      * Reusable command for applying the back button alpha on the background thread.
@@ -73,6 +79,7 @@ public abstract class BaseQuickstepLauncher extends Launcher
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        mSystemActions = new SystemActions(this);
 
         SysUINavigationMode.Mode mode = SysUINavigationMode.INSTANCE.get(this)
                 .addModeChangeListener(this);
@@ -128,6 +135,12 @@ public abstract class BaseQuickstepLauncher extends Launcher
     public void onNavigationModeChanged(Mode newMode) {
         getDragLayer().recreateControllers();
         getRotationHelper().setRotationHadDifferentUI(newMode != Mode.NO_BUTTON);
+    }
+
+    @Override
+    public void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        mSystemActions.onActivityResult(requestCode);
     }
 
     @Override
@@ -193,6 +206,15 @@ public abstract class BaseQuickstepLauncher extends Launcher
             // removes the task itself.
             startActivity(ProxyActivityStarter.getLaunchIntent(this, null));
         }
+
+        // Register all system actions once they are available
+        mSystemActions.register();
+    }
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+        mSystemActions.unregister();
     }
 
     @Override
@@ -202,7 +224,17 @@ public abstract class BaseQuickstepLauncher extends Launcher
         if (FeatureFlags.ENABLE_OVERVIEW_ACTIONS.get() && removeShelfFromOverview(this)) {
             // Overview is above all other launcher elements, including qsb, so move it to the top.
             getOverviewPanel().bringToFront();
+            if (getActionsView() != null) {
+                getActionsView().bringToFront();
+            }
         }
+    }
+
+    @Override
+    protected void closeOpenViews(boolean animate) {
+        super.closeOpenViews(animate);
+        ActivityManagerWrapper.getInstance()
+                .closeSystemWindows(CLOSE_SYSTEM_WINDOWS_REASON_HOME_KEY);
     }
 
     @Override
@@ -217,9 +249,10 @@ public abstract class BaseQuickstepLauncher extends Launcher
     @Override
     protected ScaleAndTranslation getOverviewScaleAndTranslationForNormalState() {
         if (SysUINavigationMode.getMode(this) == Mode.NO_BUTTON) {
-            float offscreenTranslationX = getDeviceProfile().widthPx
-                    - getOverviewPanel().getPaddingStart();
-            return new ScaleAndTranslation(1f, offscreenTranslationX, 0f);
+            PagedOrientationHandler layoutVertical =
+                ((RecentsView)getOverviewPanel()).getPagedViewOrientedState().getOrientationHandler();
+            return layoutVertical.getScaleAndTranslation(getDeviceProfile(),
+                getOverviewPanel());
         }
         return super.getOverviewScaleAndTranslationForNormalState();
     }

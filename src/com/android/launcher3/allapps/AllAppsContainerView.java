@@ -98,10 +98,12 @@ public class AllAppsContainerView extends SpringRelativeLayout implements DragSo
     protected boolean mUsingTabs;
     private boolean mSearchModeWhileUsingTabs = false;
 
-    private RecyclerViewFastScroller mTouchHandler;
-    private final Point mFastScrollerOffset = new Point();
+    protected RecyclerViewFastScroller mTouchHandler;
+    protected final Point mFastScrollerOffset = new Point();
 
     private final MultiValueAlpha mMultiValueAlpha;
+
+    Rect mInsets = new Rect();
 
     public AllAppsContainerView(Context context) {
         this(context, null);
@@ -236,6 +238,16 @@ public class AllAppsContainerView extends SpringRelativeLayout implements DragSo
 
     @Override
     public boolean onTouchEvent(MotionEvent ev) {
+        if (ev.getAction() == MotionEvent.ACTION_DOWN) {
+            AllAppsRecyclerView rv = getActiveRecyclerView();
+            if (rv != null && rv.getScrollbar().isHitInParent(ev.getX(), ev.getY(),
+                    mFastScrollerOffset)) {
+                mTouchHandler = rv.getScrollbar();
+            } else {
+                mTouchHandler = null;
+
+            }
+        }
         if (mTouchHandler != null) {
             mTouchHandler.handleTouchEvent(ev, mFastScrollerOffset);
             return true;
@@ -325,6 +337,7 @@ public class AllAppsContainerView extends SpringRelativeLayout implements DragSo
 
     @Override
     public void setInsets(Rect insets) {
+        mInsets.set(insets);
         DeviceProfile grid = mLauncher.getDeviceProfile();
         int leftRightPadding = grid.desiredWorkspaceLeftRightMarginPx
                 + grid.cellLayoutPaddingLeftRightPx;
@@ -416,6 +429,7 @@ public class AllAppsContainerView extends SpringRelativeLayout implements DragSo
                 new ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
                         ViewGroup.LayoutParams.WRAP_CONTENT));
         this.addView(mWorkFooterContainer);
+        mWorkFooterContainer.setInsets(mInsets);
         mWorkFooterContainer.post(() -> mAH[AdapterHolder.WORK].applyPadding());
     }
 
@@ -553,17 +567,6 @@ public class AllAppsContainerView extends SpringRelativeLayout implements DragSo
         return mHeader != null && mHeader.getVisibility() == View.VISIBLE;
     }
 
-    public void onScrollUpEnd() {
-        highlightWorkTabIfNecessary();
-    }
-
-    void highlightWorkTabIfNecessary() {
-        if (mUsingTabs) {
-            ((PersonalWorkSlidingTabStrip) findViewById(R.id.tabs))
-                    .highlightWorkTabIfNecessary();
-        }
-    }
-
     /**
      * Adds an update listener to {@param animator} that adds springs to the animation.
      */
@@ -648,9 +651,9 @@ public class AllAppsContainerView extends SpringRelativeLayout implements DragSo
                         R.layout.work_apps_paused, null);
                 recyclerView.post(() -> {
                     int width = recyclerView.getWidth();
-                    int height = recyclerView.getHeight();
-                    pausedOverlay.measure(makeMeasureSpec(width, EXACTLY),
-                            makeMeasureSpec(height, EXACTLY));
+                    int height = recyclerView.getHeight() -  mWorkFooterContainer.getHeight();
+                    pausedOverlay.measure(makeMeasureSpec(recyclerView.getWidth(), EXACTLY),
+                            makeMeasureSpec(recyclerView.getHeight(), EXACTLY));
                     pausedOverlay.layout(0, 0, width, height);
                     applyPadding();
                 });

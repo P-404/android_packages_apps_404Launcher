@@ -17,8 +17,6 @@
 package com.android.quickstep;
 
 import static com.android.launcher3.ui.TaplTestsLauncher3.getAppPackageName;
-import static com.android.launcher3.util.rule.TestStabilityRule.LOCAL;
-import static com.android.launcher3.util.rule.TestStabilityRule.UNBUNDLED_POSTSUBMIT;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
@@ -41,11 +39,9 @@ import com.android.launcher3.tapl.Overview;
 import com.android.launcher3.tapl.OverviewTask;
 import com.android.launcher3.tapl.TestHelpers;
 import com.android.launcher3.ui.TaplTestsLauncher3;
-import com.android.launcher3.util.rule.TestStabilityRule;
 import com.android.quickstep.NavigationModeSwitchRule.NavigationModeSwitch;
 import com.android.quickstep.views.RecentsView;
 
-import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -53,21 +49,10 @@ import org.junit.runner.RunWith;
 @LargeTest
 @RunWith(AndroidJUnit4.class)
 public class TaplTestsQuickstep extends AbstractQuickStepTest {
-    private int mLauncherPid;
-
     @Before
     public void setUp() throws Exception {
-        mLauncherPid = 0;
         super.setUp();
         TaplTestsLauncher3.initialize(this);
-        mLauncherPid = mLauncher.getPid();
-    }
-
-    @After
-    public void teardown() {
-        if (mLauncherPid != 0) {
-            assertEquals("Launcher crashed, pid mismatch:", mLauncherPid, mLauncher.getPid());
-        }
     }
 
     private void startTestApps() throws Exception {
@@ -93,6 +78,10 @@ public class TaplTestsQuickstep extends AbstractQuickStepTest {
 
     @Test
     public void testAllAppsFromOverview() throws Exception {
+        if (!mLauncher.hasAllAppsInOverview()) {
+            return;
+        }
+
         // Test opening all apps from Overview.
         assertNotNull("switchToAllApps() returned null",
                 mLauncher.getWorkspace().switchToOverview().switchToAllApps());
@@ -153,8 +142,8 @@ public class TaplTestsQuickstep extends AbstractQuickStepTest {
                 launcher -> assertEquals("Dismissing a task didn't remove 1 task from Overview",
                         numTasks - 1, getTaskCount(launcher)));
 
-        if (!TestHelpers.isInLauncherProcess() ||
-                getFromLauncher(launcher -> !launcher.getDeviceProfile().isLandscape)) {
+        if (mLauncher.hasAllAppsInOverview() && (!TestHelpers.isInLauncherProcess()
+                || getFromLauncher(launcher -> !launcher.getDeviceProfile().isLandscape))) {
             // Test switching to all apps and back.
             final AllAppsFromOverview allApps = overview.switchToAllApps();
             assertNotNull("overview.switchToAllApps() returned null (1)", allApps);
@@ -197,6 +186,10 @@ public class TaplTestsQuickstep extends AbstractQuickStepTest {
 
     @Test
     public void testAppIconLaunchFromAllAppsFromOverview() throws Exception {
+        if (!mLauncher.hasAllAppsInOverview()) {
+            return;
+        }
+
         final AllApps allApps =
                 mLauncher.getWorkspace().switchToOverview().switchToAllApps();
         assertTrue("Launcher internal state is not All Apps",
@@ -258,8 +251,6 @@ public class TaplTestsQuickstep extends AbstractQuickStepTest {
     @Test
     @NavigationModeSwitch
     @PortraitLandscape
-    // b/143285809 Remove @Stability on 02/27/20 if the test doesn't flake.
-    @TestStabilityRule.Stability(flavors = LOCAL | UNBUNDLED_POSTSUBMIT)
     public void testQuickSwitchFromApp() throws Exception {
         startTestActivity(2);
         startTestActivity(3);

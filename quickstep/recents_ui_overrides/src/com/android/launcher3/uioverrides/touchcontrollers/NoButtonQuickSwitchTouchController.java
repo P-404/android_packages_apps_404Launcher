@@ -116,12 +116,13 @@ public class NoButtonQuickSwitchTouchController implements TouchController,
         mLauncher = launcher;
         mSwipeDetector = new BothAxesSwipeDetector(mLauncher, this);
         mShelfPeekAnim = mLauncher.getShelfPeekAnim();
+        mRecentsView = mLauncher.getOverviewPanel();
         mXRange = mLauncher.getDeviceProfile().widthPx / 2f;
-        mYRange = LayoutUtils.getShelfTrackingDistance(mLauncher, mLauncher.getDeviceProfile());
+        mYRange = LayoutUtils.getShelfTrackingDistance(
+            mLauncher, mLauncher.getDeviceProfile());
         mMotionPauseDetector = new MotionPauseDetector(mLauncher);
         mMotionPauseMinDisplacement = mLauncher.getResources().getDimension(
                 R.dimen.motion_pause_detector_min_displacement_from_app);
-        mRecentsView = mLauncher.getOverviewPanel();
     }
 
     @Override
@@ -317,7 +318,7 @@ public class NoButtonQuickSwitchTouchController implements TouchController,
         // home screen elements will appear in the shelf on motion pause.
         mMotionPauseDetector.setDisallowPause(mIsHomeScreenVisible
                 || -displacement.y < mMotionPauseMinDisplacement);
-        mMotionPauseDetector.addPosition(displacement.y, ev.getEventTime());
+        mMotionPauseDetector.addPosition(ev);
 
         if (mIsHomeScreenVisible) {
             // Cancel the shelf anim so it doesn't clobber mNonOverviewAnim.
