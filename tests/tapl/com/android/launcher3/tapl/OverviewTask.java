@@ -56,7 +56,7 @@ public final class OverviewTask {
                      "want to dismiss a task")) {
             verifyActiveContainer();
             // Dismiss the task via flinging it up.
-            final Rect taskBounds = mTask.getVisibleBounds();
+            final Rect taskBounds = mLauncher.getVisibleBounds(mTask);
             final int centerX = taskBounds.centerX();
             final int centerY = taskBounds.centerY();
             mLauncher.linearGesture(centerX, centerY, centerX, 0, 10, false,
@@ -79,6 +79,8 @@ public final class OverviewTask {
                         () -> "Launching task didn't open a new window: "
                                 + mTask.getParent().getContentDescription());
                 mLauncher.expectEvent(TestProtocol.SEQUENCE_MAIN, TASK_START_EVENT);
+                mLauncher.expectEvent(
+                        TestProtocol.SEQUENCE_MAIN, LauncherInstrumentation.EVENT_STOP_ACTIVITY);
             }
             return new Background(mLauncher);
         }

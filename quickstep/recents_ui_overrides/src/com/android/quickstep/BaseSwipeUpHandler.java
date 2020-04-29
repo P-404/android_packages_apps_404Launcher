@@ -31,6 +31,7 @@ import android.graphics.PointF;
 import android.graphics.Rect;
 import android.graphics.RectF;
 import android.os.Build;
+import android.util.Log;
 import android.util.Pair;
 import android.view.MotionEvent;
 import android.view.View;
@@ -45,9 +46,9 @@ import com.android.launcher3.R;
 import com.android.launcher3.Utilities;
 import com.android.launcher3.anim.AnimationSuccessListener;
 import com.android.launcher3.anim.AnimatorPlaybackController;
-import com.android.launcher3.graphics.RotationMode;
 import com.android.launcher3.model.PagedViewOrientedState;
 import com.android.launcher3.states.RotationHelper;
+import com.android.launcher3.testing.TestProtocol;
 import com.android.launcher3.touch.PagedOrientationHandler;
 import com.android.launcher3.touch.PortraitPagedViewHandler;
 import com.android.launcher3.util.VibratorWrapper;
@@ -79,6 +80,7 @@ public abstract class BaseSwipeUpHandler<T extends BaseDraggingActivity, Q exten
     private static final String TAG = "BaseSwipeUpHandler";
     protected static final Rect TEMP_RECT = new Rect();
 
+    public static final float MIN_PROGRESS_FOR_OVERVIEW = 0.7f;
     private static final Interpolator PULLBACK_INTERPOLATOR = DEACCEL;
 
     // The distance needed to drag to reach the task size in recents.
@@ -146,8 +148,8 @@ public abstract class BaseSwipeUpHandler<T extends BaseDraggingActivity, Q exten
         VibratorWrapper.INSTANCE.get(mContext).vibrate(OVERVIEW_HAPTIC);
     }
 
-    public Consumer<MotionEvent> getRecentsViewDispatcher(RotationMode navBarRotationMode) {
-        return mRecentsView != null ? mRecentsView.getEventDispatcher(navBarRotationMode) : null;
+    public Consumer<MotionEvent> getRecentsViewDispatcher(float navbarRotation) {
+        return mRecentsView != null ? mRecentsView.getEventDispatcher(navbarRotation) : null;
     }
 
     @UiThread
@@ -197,18 +199,33 @@ public abstract class BaseSwipeUpHandler<T extends BaseDraggingActivity, Q exten
     }
 
     protected void startNewTask(int successStateFlag, Consumer<Boolean> resultCallback) {
+        if (TestProtocol.sDebugTracing) {
+            Log.d(TestProtocol.NO_START_FROM_RECENTS, "startNewTask1");
+        }
         // Launch the task user scrolled to (mRecentsView.getNextPage()).
         if (ENABLE_QUICKSTEP_LIVE_TILE.get()) {
             // We finish recents animation inside launchTask() when live tile is enabled.
             mRecentsView.getNextPageTaskView().launchTask(false /* animate */,
                     true /* freezeTaskList */);
         } else {
+            if (TestProtocol.sDebugTracing) {
+                Log.d(TestProtocol.NO_START_FROM_RECENTS, "startNewTask2");
+            }
             int taskId = mRecentsView.getNextPageTaskView().getTask().key.id;
             mFinishingRecentsAnimationForNewTaskId = taskId;
             mRecentsAnimationController.finish(true /* toRecents */, () -> {
+                if (TestProtocol.sDebugTracing) {
+                    Log.d(TestProtocol.NO_START_FROM_RECENTS, "onFinishComplete1");
+                }
                 if (!mCanceled) {
+                    if (TestProtocol.sDebugTracing) {
+                        Log.d(TestProtocol.NO_START_FROM_RECENTS, "onFinishComplete2");
+                    }
                     TaskView nextTask = mRecentsView.getTaskView(taskId);
                     if (nextTask != null) {
+                        if (TestProtocol.sDebugTracing) {
+                            Log.d(TestProtocol.NO_START_FROM_RECENTS, "onFinishComplete3");
+                        }
                         nextTask.launchTask(false /* animate */, true /* freezeTaskList */,
                                 success -> {
                                     resultCallback.accept(success);
@@ -481,10 +498,6 @@ public abstract class BaseSwipeUpHandler<T extends BaseDraggingActivity, Q exten
             public void onUpdate(RectF currentRect, float progress) {
                 homeAnim.setPlayFraction(progress);
 
-                mTransformParams.setProgress(
-                        Utilities.mapRange(progress, startTransformProgress, endTransformProgress))
-                        .setCurrentRect(currentRect)
-                        .setTargetAlpha(getWindowAlpha(progress));
                 rotatedRect.set(currentRect);
                 if (isFloatingIconView) {
                     RotationHelper.mapRectFromNormalOrientation(rotatedRect,
@@ -492,6 +505,10 @@ public abstract class BaseSwipeUpHandler<T extends BaseDraggingActivity, Q exten
                     mTransformParams.setCornerRadius(endRadius * progress + startRadius
                         * (1f - progress));
                 }
+                mTransformParams.setProgress(
+                    Utilities.mapRange(progress, startTransformProgress, endTransformProgress))
+                    .setCurrentRect(rotatedRect)
+                    .setTargetAlpha(getWindowAlpha(progress));
                 mAppWindowAnimationHelper.applyTransform(mTransformParams);
 
                 if (isFloatingIconView) {

@@ -18,14 +18,16 @@ package com.android.launcher3;
 
 import android.content.Context;
 import android.util.AttributeSet;
+import android.util.Log;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
 
-import com.android.launcher3.compat.AccessibilityManagerCompat;
-import com.android.launcher3.views.RecyclerViewFastScroller;
-
 import androidx.recyclerview.widget.RecyclerView;
+
+import com.android.launcher3.compat.AccessibilityManagerCompat;
+import com.android.launcher3.testing.TestProtocol;
+import com.android.launcher3.views.RecyclerViewFastScroller;
 
 
 /**
@@ -138,7 +140,7 @@ public abstract class BaseRecyclerView extends RecyclerView  {
         if (getCurrentScrollY() == 0) {
             return true;
         }
-        return false;
+        return getAdapter() == null || getAdapter().getItemCount() == 0;
     }
 
     /**
@@ -176,6 +178,10 @@ public abstract class BaseRecyclerView extends RecyclerView  {
     @Override
     public void onScrollStateChanged(int state) {
         super.onScrollStateChanged(state);
+
+        if (TestProtocol.sDebugTracing) {
+            Log.d(TestProtocol.NO_SCROLL_END_WIDGETS, "onScrollStateChanged: " + state);
+        }
 
         if (state == SCROLL_STATE_IDLE) {
             AccessibilityManagerCompat.sendScrollFinishedEventToTest(getContext());

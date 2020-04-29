@@ -23,7 +23,7 @@
     <dimen name="task_corner_radius_small">2dp</dimen>
 
     <!-- Overrideable in overlay that provides the Overview Actions. -->
-    <dimen name="overview_actions_height">0dp</dimen>
+    <dimen name="overview_actions_height">110dp</dimen>
 
     <dimen name="recents_page_spacing">10dp</dimen>
     <dimen name="recents_clear_all_deadzone_vertical_margin">70dp</dimen>
@@ -65,9 +65,6 @@
     <!-- Copied from framework resource:
        docked_stack_divider_thickness - 2 * docked_stack_divider_insets -->
     <dimen name="multi_window_task_divider_size">10dp</dimen>
-
-    <!-- same as vertical_drag_handle_size -->
-    <dimen name="shelf_surface_offset">24dp</dimen>
 
     <!-- Assistant Gestures -->
     <!-- Distance from the vertical edges of the screen in which assist gestures are recognized -->

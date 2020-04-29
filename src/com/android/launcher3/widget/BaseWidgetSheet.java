@@ -33,6 +33,8 @@ import com.android.launcher3.R;
 import com.android.launcher3.Utilities;
 import com.android.launcher3.dragndrop.DragOptions;
 import com.android.launcher3.popup.PopupDataProvider;
+import com.android.launcher3.testing.TestLogging;
+import com.android.launcher3.testing.TestProtocol;
 import com.android.launcher3.touch.ItemLongClickListener;
 import com.android.launcher3.uioverrides.WallpaperColorInfo;
 import com.android.launcher3.userevent.nano.LauncherLogProto.ContainerType;
@@ -40,6 +42,8 @@ import com.android.launcher3.userevent.nano.LauncherLogProto.Target;
 import com.android.launcher3.util.SystemUiController;
 import com.android.launcher3.util.Themes;
 import com.android.launcher3.views.AbstractSlideInView;
+
+import java.util.ArrayList;
 
 /**
  * Base class for various widgets popup
@@ -90,6 +94,8 @@ abstract class BaseWidgetSheet extends AbstractSlideInView
 
     @Override
     public boolean onLongClick(View v) {
+        TestLogging.recordEvent(TestProtocol.SEQUENCE_MAIN, "Widgets.onLongClick");
+        v.cancelLongPress();
         if (!ItemLongClickListener.canStartDrag(mLauncher)) return false;
 
         if (v instanceof WidgetCell) {
@@ -144,9 +150,11 @@ abstract class BaseWidgetSheet extends AbstractSlideInView
     }
 
     @Override
-    public void fillInLogContainerData(View v, ItemInfo info, Target target, Target targetParent) {
-        targetParent.containerType = ContainerType.WIDGETS;
-        targetParent.cardinality = getElementsRowCount();
+    public void fillInLogContainerData(ItemInfo childInfo, Target child,
+            ArrayList<Target> parents) {
+        Target target = newContainerTarget(ContainerType.WIDGETS);
+        target.cardinality = getElementsRowCount();
+        parents.add(target);
     }
 
     @Override

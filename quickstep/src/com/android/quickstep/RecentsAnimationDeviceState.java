@@ -22,6 +22,7 @@ import static com.android.quickstep.SysUINavigationMode.Mode.THREE_BUTTONS;
 import static com.android.quickstep.SysUINavigationMode.Mode.TWO_BUTTONS;
 import static com.android.systemui.shared.system.QuickStepContract.SYSUI_STATE_A11Y_BUTTON_CLICKABLE;
 import static com.android.systemui.shared.system.QuickStepContract.SYSUI_STATE_A11Y_BUTTON_LONG_CLICKABLE;
+import static com.android.systemui.shared.system.QuickStepContract.SYSUI_STATE_BUBBLES_EXPANDED;
 import static com.android.systemui.shared.system.QuickStepContract.SYSUI_STATE_HOME_DISABLED;
 import static com.android.systemui.shared.system.QuickStepContract.SYSUI_STATE_NAV_BAR_HIDDEN;
 import static com.android.systemui.shared.system.QuickStepContract.SYSUI_STATE_NOTIFICATION_PANEL_EXPANDED;
@@ -47,9 +48,9 @@ import android.view.MotionEvent;
 
 import androidx.annotation.BinderThread;
 
-import com.android.launcher3.PagedView;
 import com.android.launcher3.R;
 import com.android.launcher3.Utilities;
+import com.android.launcher3.config.FeatureFlags;
 import com.android.launcher3.testing.TestProtocol;
 import com.android.launcher3.util.DefaultDisplay;
 import com.android.quickstep.SysUINavigationMode.NavigationModeChangeListener;
@@ -100,13 +101,23 @@ public class RecentsAnimationDeviceState implements
         }
     };
 
+    private TaskStackChangeListener mFrozenTaskListener = new TaskStackChangeListener() {
+        @Override
+        public void onRecentTaskListFrozenChanged(boolean frozen) {
+            if (frozen) {
+                return;
+            }
+            mOrientationTouchTransformer.enableMultipleRegions(false, mDefaultDisplay.getInfo());
+        }
+    };
+
     private OrientationTouchTransformer mOrientationTouchTransformer;
 
     private Region mExclusionRegion;
     private SystemGestureExclusionListenerCompat mExclusionListener;
 
     private final List<ComponentName> mGestureBlockedActivities;
-    private TaskStackChangeListener mFrozenTaskListener;
+    private Runnable mOnDestroyFrozenTaskRunnable;
 
     public RecentsAnimationDeviceState(Context context) {
         final ContentResolver resolver = context.getContentResolver();
@@ -136,7 +147,9 @@ public class RecentsAnimationDeviceState implements
         };
         runOnDestroy(mExclusionListener::unregister);
 
-        setupOrientationSwipeHandler(context);
+        Resources resources = mContext.getResources();
+        mOrientationTouchTransformer = new OrientationTouchTransformer(resources, mMode,
+                () -> QuickStepContract.getWindowCornerRadius(resources));
 
         // Register for navigation mode changes
         onNavigationModeChanged(mSysUiNavMode.addModeChangeListener(this));
@@ -159,24 +172,20 @@ public class RecentsAnimationDeviceState implements
         }
     }
 
-    private void setupOrientationSwipeHandler(Context context) {
-        final Resources resources = context.getResources();
-        mOrientationTouchTransformer = new OrientationTouchTransformer(resources, mMode,
-                () -> QuickStepContract.getWindowCornerRadius(resources));
-
-        if (!PagedView.sFlagForcedRotation) {
+    private void setupOrientationSwipeHandler() {
+        if (!FeatureFlags.ENABLE_FIXED_ROTATION_TRANSFORM.get()) {
             return;
         }
 
-        mFrozenTaskListener = new TaskStackChangeListener() {
-            @Override
-            public void onRecentTaskListFrozenChanged(boolean frozen) {
-                mOrientationTouchTransformer.enableMultipleRegions(frozen, mDefaultDisplay.getInfo());
-            }
-        };
         ActivityManagerWrapper.getInstance().registerTaskStackListener(mFrozenTaskListener);
-        runOnDestroy(() -> ActivityManagerWrapper.getInstance()
-                .unregisterTaskStackListener(mFrozenTaskListener));
+        mOnDestroyFrozenTaskRunnable = () -> ActivityManagerWrapper.getInstance()
+                .unregisterTaskStackListener(mFrozenTaskListener);
+        runOnDestroy(mOnDestroyFrozenTaskRunnable);
+    }
+
+    private void destroyOrientationSwipeHandlerCallback() {
+        ActivityManagerWrapper.getInstance().unregisterTaskStackListener(mFrozenTaskListener);
+        mOnDestroyActions.remove(mOnDestroyFrozenTaskRunnable);
     }
 
     private void runOnDestroy(Runnable action) {
@@ -216,11 +225,17 @@ public class RecentsAnimationDeviceState implements
         } else {
             mExclusionListener.unregister();
         }
+
+        mNavBarPosition = new NavBarPosition(newMode, mDefaultDisplay.getInfo());
+
+        mOrientationTouchTransformer.setNavigationMode(newMode, mDefaultDisplay.getInfo());
+        if (!mMode.hasGestures && newMode.hasGestures) {
+            setupOrientationSwipeHandler();
+        } else if (mMode.hasGestures && !newMode.hasGestures){
+            destroyOrientationSwipeHandlerCallback();
+        }
+
         mMode = newMode;
-
-        mNavBarPosition = new NavBarPosition(mMode, mDefaultDisplay.getInfo());
-
-        mOrientationTouchTransformer.setNavigationMode(mMode);
     }
 
     @Override
@@ -342,6 +357,7 @@ public class RecentsAnimationDeviceState implements
         return (mSystemUiStateFlags & SYSUI_STATE_NAV_BAR_HIDDEN) == 0
                 && (mSystemUiStateFlags & SYSUI_STATE_NOTIFICATION_PANEL_EXPANDED) == 0
                 && (mSystemUiStateFlags & SYSUI_STATE_QUICK_SETTINGS_EXPANDED) == 0
+                && (mSystemUiStateFlags & SYSUI_STATE_BUBBLES_EXPANDED) == 0
                 && ((mSystemUiStateFlags & SYSUI_STATE_HOME_DISABLED) == 0
                         || (mSystemUiStateFlags & SYSUI_STATE_OVERVIEW_DISABLED) == 0);
     }

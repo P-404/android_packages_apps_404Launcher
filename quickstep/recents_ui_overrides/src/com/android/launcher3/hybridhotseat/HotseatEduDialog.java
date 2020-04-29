@@ -16,7 +16,8 @@
 package com.android.launcher3.hybridhotseat;
 
 import static com.android.launcher3.logging.LoggerUtils.newLauncherEvent;
-import static com.android.launcher3.userevent.nano.LauncherLogProto.ControlType.HYBRID_HOTSEAT_CANCELED;
+import static com.android.launcher3.userevent.nano.LauncherLogProto.ControlType
+        .HYBRID_HOTSEAT_CANCELED;
 
 import android.animation.PropertyValuesHolder;
 import android.content.Context;
@@ -27,7 +28,6 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.widget.Button;
 import android.widget.TextView;
-import android.widget.Toast;
 
 import com.android.launcher3.CellLayout;
 import com.android.launcher3.DeviceProfile;
@@ -35,7 +35,6 @@ import com.android.launcher3.Insettable;
 import com.android.launcher3.Launcher;
 import com.android.launcher3.R;
 import com.android.launcher3.WorkspaceItemInfo;
-import com.android.launcher3.WorkspaceLayoutManager;
 import com.android.launcher3.anim.Interpolators;
 import com.android.launcher3.config.FeatureFlags;
 import com.android.launcher3.logging.UserEventDispatcher;
@@ -54,22 +53,13 @@ public class HotseatEduDialog extends AbstractSlideInView implements Insettable 
     private static final int DEFAULT_CLOSE_DURATION = 200;
     protected static final int FINAL_SCRIM_BG_COLOR = 0x88000000;
 
-    // We don't migrate if user has more than SAME_PAGE_MAX_ROWS rows of item in their screen
-    private static final int SAME_PAGE_MAX_ROWS = 2;
-
-    private static final int MIGRATE_SAME_PAGE = 0;
-    private static final int MIGRATE_NEW_PAGE = 1;
-    private static final int MIGRATE_NO_MIGRATE = 2;
-
+    // we use this value to keep track of migration logs as we experiment with different migrations
+    private static final int MIGRATION_EXPERIMENT_IDENTIFIER = 1;
 
     private final Rect mInsets = new Rect();
     private View mHotseatWrapper;
     private CellLayout mSampleHotseat;
-    private TextView mEduHeading;
-    private TextView mEduContent;
     private Button mDismissBtn;
-
-    private int mMigrationMode = MIGRATE_SAME_PAGE;
 
     public void setHotseatEduController(HotseatEduController hotseatEduController) {
         mHotseatEduController = hotseatEduController;
@@ -93,8 +83,6 @@ public class HotseatEduDialog extends AbstractSlideInView implements Insettable 
         super.onFinishInflate();
         mHotseatWrapper = findViewById(R.id.hotseat_wrapper);
         mSampleHotseat = findViewById(R.id.sample_prediction);
-        mEduHeading = findViewById(R.id.hotseat_edu_heading);
-        mEduContent = findViewById(R.id.hotseat_edu_content);
 
         DeviceProfile grid = mLauncher.getDeviceProfile();
         Rect padding = grid.getHotseatLayoutPadding();
@@ -109,25 +97,28 @@ public class HotseatEduDialog extends AbstractSlideInView implements Insettable 
         mDismissBtn = findViewById(R.id.no_thanks);
         mDismissBtn.setOnClickListener(this::onDismiss);
 
+        // update ui to reflect which migration method is going to be used
+        if (FeatureFlags.HOTSEAT_MIGRATE_TO_FOLDER.get()) {
+            ((TextView) findViewById(R.id.hotseat_edu_content)).setText(
+                    R.string.hotseat_edu_message_migrate_alt);
+        }
     }
 
     private void onAccept(View v) {
-        if (mMigrationMode == MIGRATE_NO_MIGRATE || !mHotseatEduController.migrate()) {
-            onDismiss(v);
-            return;
-        }
+        mHotseatEduController.migrate();
         handleClose(true);
+
+        mHotseatEduController.moveHotseatItems();
         mHotseatEduController.finishOnboarding();
-        logUserAction(true);
-        int toastStringRes = mMigrationMode == MIGRATE_SAME_PAGE
-                ? R.string.hotseat_items_migrated : R.string.hotseat_items_migrated_alt;
-        Toast.makeText(mLauncher, toastStringRes, Toast.LENGTH_LONG).show();
+        //TODO: pass actual page index here.
+        // Temporarily we're passing 1 for folder migration and 2 for page migration
+        logUserAction(true, FeatureFlags.HOTSEAT_MIGRATE_TO_FOLDER.get() ? 1 : 2);
     }
 
     private void onDismiss(View v) {
-        Toast.makeText(getContext(), R.string.hotseat_no_migration, Toast.LENGTH_LONG).show();
+        mHotseatEduController.showDimissTip();
         mHotseatEduController.finishOnboarding();
-        logUserAction(false);
+        logUserAction(false, -1);
         handleClose(true);
     }
 
@@ -159,7 +150,7 @@ public class HotseatEduDialog extends AbstractSlideInView implements Insettable 
                 mLauncher.getDeviceProfile().hotseatBarSizePx + insets.bottom;
     }
 
-    private void logUserAction(boolean migrated) {
+    private void logUserAction(boolean migrated, int pageIndex) {
         LauncherLogProto.Action action = new LauncherLogProto.Action();
         LauncherLogProto.Target target = new LauncherLogProto.Target();
         action.type = LauncherLogProto.Action.Type.TOUCH;
@@ -168,8 +159,10 @@ public class HotseatEduDialog extends AbstractSlideInView implements Insettable 
         target.tipType = LauncherLogProto.TipType.HYBRID_HOTSEAT;
         target.controlType = migrated ? LauncherLogProto.ControlType.HYBRID_HOTSEAT_ACCEPTED
                 : HYBRID_HOTSEAT_CANCELED;
+        target.rank = MIGRATION_EXPERIMENT_IDENTIFIER;
         // encoding migration type on pageIndex
-        target.pageIndex = mMigrationMode;
+        target.pageIndex = pageIndex;
+        target.cardinality = HotseatPredictionController.MAX_ITEMS_FOR_MIGRATION;
         LauncherLogProto.LauncherEvent event = newLauncherEvent(action, target);
         UserEventDispatcher.newInstance(getContext()).dispatchUserEvent(event, null);
     }
@@ -216,31 +209,10 @@ public class HotseatEduDialog extends AbstractSlideInView implements Insettable 
             WorkspaceItemInfo info = predictions.get(i);
             PredictedAppIcon icon = PredictedAppIcon.createIcon(mSampleHotseat, info);
             icon.setEnabled(false);
+            icon.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
             icon.verifyHighRes();
             CellLayout.LayoutParams lp = new CellLayout.LayoutParams(i, 0, 1, 1);
             mSampleHotseat.addViewToCellLayout(icon, i, info.getViewId(), lp, true);
-        }
-    }
-
-    @Override
-    protected void attachToContainer() {
-        super.attachToContainer();
-        if (FeatureFlags.HOTSEAT_MIGRATE_NEW_PAGE.get()) {
-            mEduContent.setText(R.string.hotseat_edu_message_migrate_alt);
-            mMigrationMode = MIGRATE_NEW_PAGE;
-            return;
-        }
-        CellLayout page = mLauncher.getWorkspace().getScreenWithId(
-                WorkspaceLayoutManager.FIRST_SCREEN_ID);
-
-        int maxItemsOnPage = SAME_PAGE_MAX_ROWS * mLauncher.getDeviceProfile().inv.numColumns
-                + (FeatureFlags.QSB_ON_FIRST_SCREEN ? 1 : 0);
-        if (page.getShortcutsAndWidgets().getChildCount() > maxItemsOnPage
-                || !page.makeSpaceForHotseatMigration(false)) {
-            mMigrationMode = MIGRATE_NO_MIGRATE;
-            mEduContent.setText(R.string.hotseat_edu_message_no_migrate);
-            mEduHeading.setText(R.string.hotseat_edu_title_no_migrate);
-            mDismissBtn.setVisibility(GONE);
         }
     }
 

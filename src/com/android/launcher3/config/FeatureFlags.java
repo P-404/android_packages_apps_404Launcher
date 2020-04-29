@@ -36,6 +36,8 @@ public final class FeatureFlags {
     private static final List<DebugFlag> sDebugFlags = new ArrayList<>();
 
     public static final String FLAGS_PREF_NAME = "featureFlags";
+    public static final String FLAG_ENABLE_FIXED_ROTATION_TRANSFORM =
+            "ENABLE_FIXED_ROTATION_TRANSFORM";
 
     private FeatureFlags() { }
 
@@ -81,6 +83,9 @@ public final class FeatureFlags {
     public static final BooleanFlag UNSTABLE_SPRINGS = getDebugFlag(
             "UNSTABLE_SPRINGS", false, "Enable unstable springs for quickstep animations");
 
+    public static final BooleanFlag KEYGUARD_ANIMATION = getDebugFlag(
+            "KEYGUARD_ANIMATION", false, "Enable animation for keyguard going away on wallpaper");
+
     public static final BooleanFlag ADAPTIVE_ICON_WINDOW_ANIM = getDebugFlag(
             "ADAPTIVE_ICON_WINDOW_ANIM", true, "Use adaptive icons for window animations.");
 
@@ -90,18 +95,16 @@ public final class FeatureFlags {
     public static final BooleanFlag ENABLE_HINTS_IN_OVERVIEW = getDebugFlag(
             "ENABLE_HINTS_IN_OVERVIEW", false, "Show chip hints and gleams on the overview screen");
 
-    public static final BooleanFlag FAKE_LANDSCAPE_UI = getDebugFlag(
-            "FAKE_LANDSCAPE_UI", false, "Rotate launcher UI instead of using transposed layout");
-
-    public static final BooleanFlag FOLDER_NAME_SUGGEST = getDebugFlag(
-            "FOLDER_NAME_SUGGEST", true, "Suggests folder names instead of blank text.");
+    public static final BooleanFlag FOLDER_NAME_SUGGEST = new DeviceFlag(
+            "FOLDER_NAME_SUGGEST", true,
+            "Suggests folder names instead of blank text.");
 
     public static final BooleanFlag APP_SEARCH_IMPROVEMENTS = new DeviceFlag(
-            "APP_SEARCH_IMPROVEMENTS", false,
+            "APP_SEARCH_IMPROVEMENTS", true,
             "Adds localized title and keyword search and ranking");
 
-    public static final BooleanFlag ENABLE_PREDICTION_DISMISS = new DeviceFlag(
-            "ENABLE_PREDICTION_DISMISS", true, "Allow option to dimiss apps from predicted list");
+    public static final BooleanFlag ENABLE_PREDICTION_DISMISS = getDebugFlag(
+            "ENABLE_PREDICTION_DISMISS", false, "Allow option to dimiss apps from predicted list");
 
     public static final BooleanFlag ENABLE_QUICK_CAPTURE_GESTURE = getDebugFlag(
             "ENABLE_QUICK_CAPTURE_GESTURE", true, "Swipe from right to left to quick capture");
@@ -117,9 +120,8 @@ public final class FeatureFlags {
     public static final BooleanFlag ENABLE_HYBRID_HOTSEAT = new DeviceFlag(
             "ENABLE_HYBRID_HOTSEAT", false, "Fill gaps in hotseat with predicted apps");
 
-    public static final BooleanFlag HOTSEAT_MIGRATE_NEW_PAGE = new DeviceFlag(
-            "HOTSEAT_MIGRATE_NEW_PAGE", true,
-            "Migrates hotseat to a new workspace page instead of same page");
+    public static final BooleanFlag HOTSEAT_MIGRATE_TO_FOLDER = new DeviceFlag(
+            "HOTSEAT_MIGRATE_TO_FOLDER", false, "Should move hotseat items into a folder");
 
     public static final BooleanFlag ENABLE_DEEP_SHORTCUT_ICON_CACHE = getDebugFlag(
             "ENABLE_DEEP_SHORTCUT_ICON_CACHE", true, "R/W deep shortcut in IconCache");
@@ -128,12 +130,17 @@ public final class FeatureFlags {
             "MULTI_DB_GRID_MIRATION_ALGO", false, "Use the multi-db grid migration algorithm");
 
     public static final BooleanFlag ENABLE_LAUNCHER_PREVIEW_IN_GRID_PICKER = getDebugFlag(
-            "ENABLE_LAUNCHER_PREVIEW_IN_GRID_PICKER", true,
-            "Show launcher preview in grid picker");
+            "ENABLE_LAUNCHER_PREVIEW_IN_GRID_PICKER", true, "Show launcher preview in grid picker");
+
+    public static final BooleanFlag USE_SURFACE_VIEW_FOR_GRID_PREVIEW = getDebugFlag(
+            "USE_SURFACE_VIEW_FOR_GRID_PREVIEW", true, "Use surface view for grid preview");
 
     public static final BooleanFlag ENABLE_OVERVIEW_ACTIONS = getDebugFlag(
             "ENABLE_OVERVIEW_ACTIONS", true, "Show app actions instead of the shelf in Overview."
             + " As part of this decoupling, also distinguish swipe up from nav bar vs above it.");
+
+    public static final BooleanFlag ENABLE_SELECT_MODE = getDebugFlag(
+            "ENABLE_SELECT_MODE", true, "Show Select Mode button in Overview Actions");
 
     public static final BooleanFlag ENABLE_DATABASE_RESTORE = getDebugFlag(
             "ENABLE_DATABASE_RESTORE", true,
@@ -144,13 +151,17 @@ public final class FeatureFlags {
             "Replace Smartspace with a version rendered by System UI.");
 
     public static final BooleanFlag ENABLE_LSQ_VELOCITY_PROVIDER = getDebugFlag(
-            "ENABLE_LSQ_VELOCITY_PROVIDER", false,
+            "ENABLE_LSQ_VELOCITY_PROVIDER", true,
             "Use Least Square algorithm for motion pause detection.");
 
     public static final BooleanFlag ALWAYS_USE_HARDWARE_OPTIMIZATION_FOR_FOLDER_ANIMATIONS =
             getDebugFlag(
             "ALWAYS_USE_HARDWARE_OPTIMIZATION_FOR_FOLDER_ANIMATIONS", false,
             "Always use hardware optimization for folder animations.");
+
+    public static final BooleanFlag ENABLE_FIXED_ROTATION_TRANSFORM = getDebugFlag(
+            FLAG_ENABLE_FIXED_ROTATION_TRANSFORM, true,
+            "Launch/close apps without rotation animation. Fix Launcher to portrait");
 
     public static void initialize(Context context) {
         synchronized (sDebugFlags) {

@@ -60,6 +60,23 @@ public interface InputConsumer {
     }
 
     /**
+     * Returns true if the lifecycle of this input consumer is detached from the normal gesture
+     * down/up flow. If so, it is the responsibility of the input consumer to call back to
+     * {@link TouchInteractionService#onConsumerInactive(InputConsumer)} after the consumer is
+     * finished.
+     */
+    default boolean isConsumerDetachedFromGesture() {
+        return false;
+    }
+
+    /**
+     * Returns true if the given input consumer is in the hierarchy of this input consumer.
+     */
+    default boolean isInConsumerHierarchy(InputConsumer candidate) {
+        return this == candidate;
+    }
+
+    /**
      * Called by the event queue when the consumer is about to be switched to a new consumer.
      * Consumers should update the state accordingly here before the state is passed to the new
      * consumer.

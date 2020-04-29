@@ -41,7 +41,6 @@ import com.android.launcher3.util.Wait.Condition;
 import com.android.launcher3.util.rule.ShellCommandRule;
 
 import org.junit.Before;
-import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -71,14 +70,12 @@ public class AddConfigWidgetTest extends AbstractLauncherUiTest {
 
     @Test
     @PortraitLandscape
-    @Ignore // b/148867106
     public void testWidgetConfig() throws Throwable {
         runTest(true);
     }
 
     @Test
     @PortraitLandscape
-    @Ignore // b/148867106
     public void testConfigCancelled() throws Throwable {
         runTest(false);
     }
@@ -97,7 +94,7 @@ public class AddConfigWidgetTest extends AbstractLauncherUiTest {
         WidgetConfigStartupMonitor monitor = new WidgetConfigStartupMonitor();
         widgets.
                 getWidget(mWidgetInfo.getLabel(mTargetContext.getPackageManager())).
-                dragToWorkspace();
+                dragToWorkspace(true);
         // Widget id for which the config activity was opened
         mWidgetId = monitor.getWidgetId();
 

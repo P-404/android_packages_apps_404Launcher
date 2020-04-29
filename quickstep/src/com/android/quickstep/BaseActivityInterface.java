@@ -32,6 +32,7 @@ import androidx.annotation.UiThread;
 import com.android.launcher3.BaseDraggingActivity;
 import com.android.launcher3.DeviceProfile;
 import com.android.launcher3.anim.AnimatorPlaybackController;
+import com.android.launcher3.statehandlers.DepthController;
 import com.android.launcher3.touch.PagedOrientationHandler;
 import com.android.quickstep.util.ActivityInitListener;
 import com.android.quickstep.util.ShelfPeekAnim;
@@ -79,6 +80,11 @@ public interface BaseActivityInterface<T extends BaseDraggingActivity> {
 
     @Nullable
     T getCreatedActivity();
+
+    @Nullable
+    default DepthController getDepthController() {
+        return null;
+    }
 
     default boolean isResumed() {
         BaseDraggingActivity activity = getCreatedActivity();

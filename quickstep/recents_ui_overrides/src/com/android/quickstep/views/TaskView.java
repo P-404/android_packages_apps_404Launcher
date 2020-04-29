@@ -29,6 +29,7 @@ import static com.android.launcher3.anim.Interpolators.FAST_OUT_SLOW_IN;
 import static com.android.launcher3.anim.Interpolators.LINEAR;
 import static com.android.launcher3.anim.Interpolators.TOUCH_RESPONSE_INTERPOLATOR;
 import static com.android.launcher3.config.FeatureFlags.ENABLE_QUICKSTEP_LIVE_TILE;
+import static com.android.launcher3.logging.StatsLogManager.LauncherEvent.TASK_LAUNCH_TAP;
 
 import android.animation.Animator;
 import android.animation.AnimatorListenerAdapter;
@@ -43,6 +44,7 @@ import android.graphics.RectF;
 import android.graphics.drawable.Drawable;
 import android.os.Bundle;
 import android.os.Handler;
+import android.os.Process;
 import android.util.AttributeSet;
 import android.util.FloatProperty;
 import android.util.Log;
@@ -58,6 +60,8 @@ import com.android.launcher3.R;
 import com.android.launcher3.Utilities;
 import com.android.launcher3.anim.AnimatorPlaybackController;
 import com.android.launcher3.anim.Interpolators;
+import com.android.launcher3.anim.PendingAnimation;
+import com.android.launcher3.logger.LauncherAtom;
 import com.android.launcher3.logging.UserEventDispatcher;
 import com.android.launcher3.popup.SystemShortcut;
 import com.android.launcher3.states.RotationHelper;
@@ -67,7 +71,7 @@ import com.android.launcher3.touch.PagedOrientationHandler;
 import com.android.launcher3.userevent.nano.LauncherLogProto;
 import com.android.launcher3.userevent.nano.LauncherLogProto.Action.Direction;
 import com.android.launcher3.userevent.nano.LauncherLogProto.Action.Touch;
-import com.android.launcher3.util.PendingAnimation;
+import com.android.launcher3.util.ComponentKey;
 import com.android.launcher3.util.ViewPool.Reusable;
 import com.android.quickstep.RecentsModel;
 import com.android.quickstep.TaskIconCache;
@@ -217,8 +221,7 @@ public class TaskView extends FrameLayout implements PageCallbacks, Reusable {
             mActivity.getUserEventDispatcher().logTaskLaunchOrDismiss(
                     Touch.TAP, Direction.NONE, getRecentsView().indexOfChild(this),
                     TaskUtils.getLaunchComponentKeyForTask(getTask().key));
-            mActivity.getStatsLogManager().logTaskLaunch(getRecentsView(),
-                    TaskUtils.getLaunchComponentKeyForTask(getTask().key));
+            mActivity.getStatsLogManager().log(TASK_LAUNCH_TAP, buildProto());
         });
         mCornerRadius = TaskCornerRadius.get(context);
         mWindowCornerRadius = QuickStepContract.getWindowCornerRadius(context.getResources());
@@ -227,6 +230,17 @@ public class TaskView extends FrameLayout implements PageCallbacks, Reusable {
 
         mOutlineProvider = new TaskOutlineProvider(getContext(), mCurrentFullscreenParams);
         setOutlineProvider(mOutlineProvider);
+    }
+
+    /* Builds proto for logging */
+    protected LauncherAtom.ItemInfo buildProto() {
+        ComponentKey componentKey = TaskUtils.getLaunchComponentKeyForTask(getTask().key);
+        LauncherAtom.ItemInfo.Builder itemBuilder = LauncherAtom.ItemInfo.newBuilder();
+        itemBuilder.setIsWork(componentKey.user != Process.myUserHandle());
+        itemBuilder.setTask(LauncherAtom.Task.newBuilder()
+                .setComponentName(componentKey.componentName.flattenToShortString())
+                .setIndex(getRecentsView().indexOfChild(this)));
+        return itemBuilder.build();
     }
 
     @Override
@@ -243,6 +257,22 @@ public class TaskView extends FrameLayout implements PageCallbacks, Reusable {
 
     public boolean isTaskOverlayModal() {
         return mSnapshotView.getTaskOverlay().isOverlayModal();
+    }
+
+    /** Updates UI based on whether the task is modal. */
+    public void updateUiForModalTask() {
+        boolean isOverlayModal = isTaskOverlayModal();
+        if (getRecentsView() != null) {
+            getRecentsView().updateUiForModalTask(this, isOverlayModal);
+        }
+        // Hide footers when overlay is modal.
+        if (isOverlayModal) {
+            for (FooterWrapper footer : mFooters) {
+                if (footer != null) {
+                    footer.animateHide();
+                }
+            }
+        }
     }
 
     public TaskMenuView getMenuView() {
@@ -278,8 +308,7 @@ public class TaskView extends FrameLayout implements PageCallbacks, Reusable {
     public AnimatorPlaybackController createLaunchAnimationForRunningTask() {
         final PendingAnimation pendingAnimation = getRecentsView().createTaskLaunchAnimation(
                 this, RECENTS_LAUNCH_DURATION, TOUCH_RESPONSE_INTERPOLATOR);
-        AnimatorPlaybackController currentAnimation = AnimatorPlaybackController.wrap(
-                pendingAnimation.anim, RECENTS_LAUNCH_DURATION);
+        AnimatorPlaybackController currentAnimation = pendingAnimation.createPlaybackController();
         currentAnimation.setEndAction(() -> {
             pendingAnimation.finish(true, Touch.SWIPE);
             launchTask(false);
@@ -774,6 +803,22 @@ public class TaskView extends FrameLayout implements PageCallbacks, Reusable {
             animator.setDuration(100);
             animator.start();
         }
+
+        void animateHide() {
+            ValueAnimator animator = ValueAnimator.ofFloat(0.0f, 1.0f);
+            animator.addUpdateListener(anim -> {
+                mFooterVerticalOffset = anim.getAnimatedFraction();
+                updateFooterOffset();
+            });
+            animator.addListener(new AnimatorListenerAdapter() {
+                @Override
+                public void onAnimationEnd(Animator animation) {
+                    removeView(mView);
+                }
+            });
+            animator.setDuration(100);
+            animator.start();
+        }
     }
 
     @Override
@@ -781,8 +826,8 @@ public class TaskView extends FrameLayout implements PageCallbacks, Reusable {
         super.onInitializeAccessibilityNodeInfo(info);
 
         info.addAction(
-                new AccessibilityNodeInfo.AccessibilityAction(R.string.accessibility_close_task,
-                        getContext().getText(R.string.accessibility_close_task)));
+                new AccessibilityNodeInfo.AccessibilityAction(R.string.accessibility_close,
+                        getContext().getText(R.string.accessibility_close)));
 
         final Context context = getContext();
         for (SystemShortcut s : TaskOverlayFactory.getEnabledShortcuts(this)) {
@@ -806,7 +851,7 @@ public class TaskView extends FrameLayout implements PageCallbacks, Reusable {
 
     @Override
     public boolean performAccessibilityAction(int action, Bundle arguments) {
-        if (action == R.string.accessibility_close_task) {
+        if (action == R.string.accessibility_close) {
             getRecentsView().dismissTask(this, true /*animateTaskView*/,
                     true /*removeTask*/);
             return true;

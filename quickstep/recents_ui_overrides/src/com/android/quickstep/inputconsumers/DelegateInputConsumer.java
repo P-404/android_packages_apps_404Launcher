@@ -25,6 +25,16 @@ public abstract class DelegateInputConsumer implements InputConsumer {
     }
 
     @Override
+    public boolean isConsumerDetachedFromGesture() {
+        return mDelegate.isConsumerDetachedFromGesture();
+    }
+
+    @Override
+    public boolean isInConsumerHierarchy(InputConsumer candidate) {
+        return this == candidate || mDelegate.isInConsumerHierarchy(candidate);
+    }
+
+    @Override
     public boolean allowInterceptByParent() {
         return mDelegate.allowInterceptByParent() && mState != STATE_ACTIVE;
     }
@@ -36,7 +46,7 @@ public abstract class DelegateInputConsumer implements InputConsumer {
 
     protected void setActive(MotionEvent ev) {
         mState = STATE_ACTIVE;
-        TestLogging.recordEvent(TestProtocol.SEQUENCE_MAIN, "pilferPointers");
+        TestLogging.recordEvent(TestProtocol.SEQUENCE_PILFER, "pilferPointers");
         mInputMonitor.pilferPointers();
 
         // Send cancel event

@@ -160,6 +160,11 @@ public class OtherActivityInputConsumer extends ContextWrapper implements InputC
         return TYPE_OTHER_ACTIVITY;
     }
 
+    @Override
+    public boolean isConsumerDetachedFromGesture() {
+        return true;
+    }
+
     private void forceCancelGesture(MotionEvent ev) {
         int action = ev.getAction();
         ev.setAction(ACTION_CANCEL);
@@ -177,7 +182,7 @@ public class OtherActivityInputConsumer extends ContextWrapper implements InputC
         if (mPassedWindowMoveSlop && mInteractionHandler != null
                 && !mRecentsViewDispatcher.hasConsumer()) {
             mRecentsViewDispatcher.setConsumer(mInteractionHandler
-                .getRecentsViewDispatcher(mNavBarPosition.getRotationMode()));
+                    .getRecentsViewDispatcher(mNavBarPosition.getRotation()));
         }
         int edgeFlags = ev.getEdgeFlags();
         ev.setEdgeFlags(edgeFlags | EDGE_NAV_BAR);
@@ -309,7 +314,7 @@ public class OtherActivityInputConsumer extends ContextWrapper implements InputC
         if (mInteractionHandler == null) {
             return;
         }
-        TestLogging.recordEvent(TestProtocol.SEQUENCE_MAIN, "pilferPointers");
+        TestLogging.recordEvent(TestProtocol.SEQUENCE_PILFER, "pilferPointers");
         mInputMonitorCompat.pilferPointers();
 
         mActivityInterface.closeOverlay();

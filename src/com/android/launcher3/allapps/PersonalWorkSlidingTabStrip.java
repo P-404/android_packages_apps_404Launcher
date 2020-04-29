@@ -71,17 +71,20 @@ public class PersonalWorkSlidingTabStrip extends LinearLayout implements PageInd
         mIsRtl = Utilities.isRtl(getResources());
     }
 
-    private void updateIndicatorPosition(float scrollOffset) {
-        mScrollOffset = scrollOffset;
-        updateIndicatorPosition();
-    }
-
-    private void updateTabTextColor(int pos) {
+    /**
+     * Highlights tab with index pos
+     */
+    public void updateTabTextColor(int pos) {
         mSelectedPosition = pos;
         for (int i = 0; i < getChildCount(); i++) {
             Button tab = (Button) getChildAt(i);
             tab.setSelected(i == pos);
         }
+    }
+
+    private void updateIndicatorPosition(float scrollOffset) {
+        mScrollOffset = scrollOffset;
+        updateIndicatorPosition();
     }
 
     @Override
@@ -132,6 +135,7 @@ public class PersonalWorkSlidingTabStrip extends LinearLayout implements PageInd
     @Override
     public void setActiveMarker(int activePage) {
         updateTabTextColor(activePage);
+        updateIndicatorPosition(activePage);
         if (mContainerView != null && mLastActivePage != activePage) {
             mContainerView.onTabChanged(activePage);
         }

@@ -16,6 +16,14 @@
 
 package com.android.launcher3;
 
+import static com.android.launcher3.compat.AccessibilityManagerCompat.isAccessibilityEnabled;
+import static com.android.launcher3.compat.AccessibilityManagerCompat.isObservedEventType;
+import static com.android.launcher3.config.FeatureFlags.QUICKSTEP_SPRINGS;
+import static com.android.launcher3.touch.OverScroll.OVERSCROLL_DAMP_FACTOR;
+import static com.android.launcher3.touch.PagedOrientationHandler.CANVAS_TRANSLATE;
+import static com.android.launcher3.touch.PagedOrientationHandler.VIEW_SCROLL_BY;
+import static com.android.launcher3.touch.PagedOrientationHandler.VIEW_SCROLL_TO;
+
 import android.animation.LayoutTransition;
 import android.animation.TimeInterpolator;
 import android.annotation.SuppressLint;
@@ -42,28 +50,22 @@ import android.view.accessibility.AccessibilityNodeInfo;
 import android.view.animation.Interpolator;
 import android.widget.ScrollView;
 
+import androidx.annotation.Nullable;
+
 import com.android.launcher3.anim.Interpolators;
 import com.android.launcher3.compat.AccessibilityManagerCompat;
 import com.android.launcher3.config.FeatureFlags;
 import com.android.launcher3.model.PagedViewOrientedState;
 import com.android.launcher3.pageindicators.PageIndicator;
-import com.android.launcher3.states.RotationHelper;
-import com.android.launcher3.touch.PortraitPagedViewHandler;
 import com.android.launcher3.touch.OverScroll;
 import com.android.launcher3.touch.PagedOrientationHandler;
 import com.android.launcher3.touch.PagedOrientationHandler.ChildBounds;
+import com.android.launcher3.touch.PortraitPagedViewHandler;
 import com.android.launcher3.util.OverScroller;
 import com.android.launcher3.util.Thunk;
+import com.android.launcher3.views.ActivityContext;
 
 import java.util.ArrayList;
-
-import static com.android.launcher3.compat.AccessibilityManagerCompat.isAccessibilityEnabled;
-import static com.android.launcher3.compat.AccessibilityManagerCompat.isObservedEventType;
-import static com.android.launcher3.config.FeatureFlags.QUICKSTEP_SPRINGS;
-import static com.android.launcher3.touch.OverScroll.OVERSCROLL_DAMP_FACTOR;
-import static com.android.launcher3.touch.PagedOrientationHandler.CANVAS_TRANSLATE;
-import static com.android.launcher3.touch.PagedOrientationHandler.VIEW_SCROLL_BY;
-import static com.android.launcher3.touch.PagedOrientationHandler.VIEW_SCROLL_TO;
 
 /**
  * An abstraction of the original Workspace which supports browsing through a
@@ -72,8 +74,6 @@ import static com.android.launcher3.touch.PagedOrientationHandler.VIEW_SCROLL_TO
 public abstract class PagedView<T extends View & PageIndicator> extends ViewGroup {
     private static final String TAG = "PagedView";
     private static final boolean DEBUG = false;
-
-    public static boolean sFlagForcedRotation = false;
 
     public static final int INVALID_PAGE = -1;
     protected static final ComputePageScrollsLogic SIMPLE_SCROLL_LOGIC = (v) -> v.getVisibility() != GONE;
@@ -136,6 +136,7 @@ public abstract class PagedView<T extends View & PageIndicator> extends ViewGrou
     protected int mActivePointerId = INVALID_POINTER;
 
     protected boolean mIsPageInTransition = false;
+    private Runnable mOnPageTransitionEndCallback;
 
     protected float mSpringOverScroll;
 
@@ -200,8 +201,6 @@ public abstract class PagedView<T extends View & PageIndicator> extends ViewGrou
         if (Utilities.ATLEAST_OREO) {
             setDefaultFocusHighlightEnabled(false);
         }
-
-        sFlagForcedRotation = Utilities.isForcedRotation(context);
     }
 
     protected void setDefaultInterpolator(Interpolator interpolator) {
@@ -396,6 +395,22 @@ public abstract class PagedView<T extends View & PageIndicator> extends ViewGrou
         AccessibilityManagerCompat.sendScrollFinishedEventToTest(getContext());
         AccessibilityManagerCompat.sendCustomAccessibilityEvent(getPageAt(mCurrentPage),
                 AccessibilityEvent.TYPE_VIEW_FOCUSED, null);
+        if (mOnPageTransitionEndCallback != null) {
+            mOnPageTransitionEndCallback.run();
+            mOnPageTransitionEndCallback = null;
+        }
+    }
+
+    /**
+     * Sets a callback to run once when the scrolling finishes. If there is currently
+     * no page in transition, then the callback is called immediately.
+     */
+    public void setOnPageTransitionEndCallback(@Nullable Runnable callback) {
+        if (mIsPageInTransition || callback == null) {
+            mOnPageTransitionEndCallback = callback;
+        } else {
+            callback.run();
+        }
     }
 
     protected int getUnboundedScroll() {
@@ -1355,10 +1370,6 @@ public abstract class PagedView<T extends View & PageIndicator> extends ViewGrou
         if ((event.getSource() & InputDevice.SOURCE_CLASS_POINTER) != 0) {
             switch (event.getAction()) {
                 case MotionEvent.ACTION_SCROLL: {
-                    Launcher launcher = Launcher.getLauncher(getContext());
-                    if (launcher != null) {
-                        AbstractFloatingView.closeAllOpenViews(launcher);
-                    }
                     // Handle mouse (or ext. device) by shifting the page depending on the scroll
                     final float vscroll;
                     final float hscroll;
@@ -1369,8 +1380,8 @@ public abstract class PagedView<T extends View & PageIndicator> extends ViewGrou
                         vscroll = -event.getAxisValue(MotionEvent.AXIS_VSCROLL);
                         hscroll = event.getAxisValue(MotionEvent.AXIS_HSCROLL);
                     }
-                    if (Math.abs(vscroll) > Math.abs(hscroll) && !isVerticalScrollable()) {
-                        return true;
+                    if (!canScroll(Math.abs(vscroll), Math.abs(hscroll))) {
+                        return false;
                     }
                     if (hscroll != 0 || vscroll != 0) {
                         boolean isForwardScroll = mIsRtl ? (hscroll < 0 || vscroll < 0)
@@ -1388,8 +1399,13 @@ public abstract class PagedView<T extends View & PageIndicator> extends ViewGrou
         return super.onGenericMotionEvent(event);
     }
 
-    protected boolean isVerticalScrollable() {
-        return true;
+    /**
+     * Returns true if the paged view can scroll for the provided vertical and horizontal
+     * scroll values
+     */
+    protected boolean canScroll(float absVScroll, float absHScroll) {
+        ActivityContext ac = ActivityContext.lookupContext(getContext());
+        return (ac == null || AbstractFloatingView.getTopOpenView(ac) == null);
     }
 
     private void acquireVelocityTrackerAndAddMovement(MotionEvent ev) {
@@ -1515,7 +1531,7 @@ public abstract class PagedView<T extends View & PageIndicator> extends ViewGrou
         // interpolator at zero, ie. 5. We use 4 to make it a little slower.
         duration = 4 * Math.round(1000 * Math.abs(distance / velocity));
 
-        if (QUICKSTEP_SPRINGS.get()) {
+        if (QUICKSTEP_SPRINGS.get() && mCurrentPage != whichPage) {
             return snapToPage(whichPage, delta, duration, false, null,
                     velocity * Math.signum(delta), true);
         } else {

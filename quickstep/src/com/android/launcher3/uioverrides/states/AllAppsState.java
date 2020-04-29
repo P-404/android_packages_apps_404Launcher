@@ -17,6 +17,8 @@ package com.android.launcher3.uioverrides.states;
 
 import static com.android.launcher3.anim.Interpolators.DEACCEL_2;
 
+import android.content.Context;
+
 import com.android.launcher3.AbstractFloatingView;
 import com.android.launcher3.Launcher;
 import com.android.launcher3.LauncherState;
@@ -82,6 +84,11 @@ public class AllAppsState extends LauncherState {
             scaleAndTranslation.scale = 1;
         }
         return scaleAndTranslation;
+    }
+
+    @Override
+    public float getDepth(Context context) {
+        return 1f;
     }
 
     @Override

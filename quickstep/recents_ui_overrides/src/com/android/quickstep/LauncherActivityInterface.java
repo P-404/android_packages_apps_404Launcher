@@ -55,6 +55,8 @@ import com.android.launcher3.LauncherState;
 import com.android.launcher3.allapps.DiscoveryBounce;
 import com.android.launcher3.anim.AnimatorPlaybackController;
 import com.android.launcher3.appprediction.PredictionUiStateManager;
+import com.android.launcher3.statehandlers.DepthController;
+import com.android.launcher3.statehandlers.DepthController.ClampedDepthProperty;
 import com.android.launcher3.touch.PagedOrientationHandler;
 import com.android.launcher3.userevent.nano.LauncherLogProto;
 import com.android.launcher3.views.FloatingIconView;
@@ -327,6 +329,16 @@ public final class LauncherActivityInterface implements BaseActivityInterface<La
                     fromState.getVerticalProgress(activity),
                     endState.getVerticalProgress(activity)));
         }
+
+        // Animate the blur and wallpaper zoom
+        DepthController depthController = getDepthController();
+        float fromDepthRatio = fromState.getDepth(activity);
+        float toDepthRatio = endState.getDepth(activity);
+        Animator depthAnimator = ObjectAnimator.ofFloat(depthController,
+                new ClampedDepthProperty(fromDepthRatio, toDepthRatio),
+                fromDepthRatio, toDepthRatio);
+        anim.play(depthAnimator);
+
         playScaleDownAnim(anim, activity, fromState, endState);
 
         anim.setDuration(transitionLength * 2);
@@ -541,5 +553,15 @@ public final class LauncherActivityInterface implements BaseActivityInterface<La
         }
         PredictionUiStateManager.INSTANCE.get(launcher).switchClient(
                 PredictionUiStateManager.Client.OVERVIEW);
+    }
+
+    @Nullable
+    @Override
+    public DepthController getDepthController() {
+        BaseQuickstepLauncher launcher = getCreatedActivity();
+        if (launcher == null) {
+            return null;
+        }
+        return launcher.getDepthController();
     }
 }

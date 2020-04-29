@@ -26,6 +26,7 @@
     <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
 
+    
     <application
         android:backupAgent="com.android.launcher3.LauncherBackupAgent"
         android:fullBackupOnly="true"
@@ -70,6 +71,17 @@
             <intent-filter>
                 <action android:name="android.content.action.SEARCH_INDEXABLES_PROVIDER" />
             </intent-filter>
+        </provider>
+
+        <!-- FileProvider used for sharing images. -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${packageName}.overview.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/overview_file_provider_paths" />
         </provider>
 
         <service

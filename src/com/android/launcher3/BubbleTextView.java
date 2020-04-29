@@ -39,13 +39,13 @@ import android.util.TypedValue;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.View;
-import android.view.ViewConfiguration;
 import android.view.ViewDebug;
 import android.widget.TextView;
 
 import com.android.launcher3.Launcher.OnResumeCallback;
 import com.android.launcher3.accessibility.LauncherAccessibilityDelegate;
 import com.android.launcher3.dot.DotInfo;
+import com.android.launcher3.dragndrop.DraggableView;
 import com.android.launcher3.folder.FolderIcon;
 import com.android.launcher3.graphics.IconPalette;
 import com.android.launcher3.graphics.IconShape;
@@ -65,7 +65,7 @@ import java.text.NumberFormat;
  * too aggressive.
  */
 public class BubbleTextView extends TextView implements ItemInfoUpdateReceiver, OnResumeCallback,
-        IconLabelDotView {
+        IconLabelDotView, DraggableView {
 
     private static final int DISPLAY_WORKSPACE = 0;
     private static final int DISPLAY_ALL_APPS = 1;
@@ -103,13 +103,11 @@ public class BubbleTextView extends TextView implements ItemInfoUpdateReceiver, 
 
     private final ActivityContext mActivity;
     private Drawable mIcon;
-    private final boolean mCenterVertically;
+    private boolean mCenterVertically;
 
     private final int mDisplay;
 
     private final CheckLongPressHelper mLongPressHelper;
-    private final StylusEventHelper mStylusEventHelper;
-    private final float mSlop;
 
     private final boolean mLayoutHorizontal;
     private final int mIconSize;
@@ -136,9 +134,6 @@ public class BubbleTextView extends TextView implements ItemInfoUpdateReceiver, 
     @ViewDebug.ExportedProperty(category = "launcher")
     private boolean mDisableRelayout = false;
 
-    @ViewDebug.ExportedProperty(category = "launcher")
-    private final boolean mIgnorePaddingTouch;
-
     private IconLoadRequest mIconLoadRequest;
 
     public BubbleTextView(Context context) {
@@ -152,36 +147,29 @@ public class BubbleTextView extends TextView implements ItemInfoUpdateReceiver, 
     public BubbleTextView(Context context, AttributeSet attrs, int defStyle) {
         super(context, attrs, defStyle);
         mActivity = ActivityContext.lookupContext(context);
-        mSlop = ViewConfiguration.get(getContext()).getScaledTouchSlop();
 
         TypedArray a = context.obtainStyledAttributes(attrs,
                 R.styleable.BubbleTextView, defStyle, 0);
         mLayoutHorizontal = a.getBoolean(R.styleable.BubbleTextView_layoutHorizontal, false);
+        DeviceProfile grid = mActivity.getDeviceProfile();
 
         mDisplay = a.getInteger(R.styleable.BubbleTextView_iconDisplay, DISPLAY_WORKSPACE);
         final int defaultIconSize;
         if (mDisplay == DISPLAY_WORKSPACE) {
-            DeviceProfile grid = mActivity.getWallpaperDeviceProfile();
             setTextSize(TypedValue.COMPLEX_UNIT_PX, grid.iconTextSizePx);
             setCompoundDrawablePadding(grid.iconDrawablePaddingPx);
             defaultIconSize = grid.iconSizePx;
-            mIgnorePaddingTouch = true;
         } else if (mDisplay == DISPLAY_ALL_APPS) {
-            DeviceProfile grid = mActivity.getDeviceProfile();
             setTextSize(TypedValue.COMPLEX_UNIT_PX, grid.allAppsIconTextSizePx);
             setCompoundDrawablePadding(grid.allAppsIconDrawablePaddingPx);
             defaultIconSize = grid.allAppsIconSizePx;
-            mIgnorePaddingTouch = true;
         } else if (mDisplay == DISPLAY_FOLDER) {
-            DeviceProfile grid = mActivity.getDeviceProfile();
             setTextSize(TypedValue.COMPLEX_UNIT_PX, grid.folderChildTextSizePx);
             setCompoundDrawablePadding(grid.folderChildDrawablePaddingPx);
             defaultIconSize = grid.folderChildIconSizePx;
-            mIgnorePaddingTouch = true;
         } else {
             // widget_selection or shortcut_popup
-            defaultIconSize = mActivity.getDeviceProfile().iconSizePx;
-            mIgnorePaddingTouch = false;
+            defaultIconSize = grid.iconSizePx;
         }
 
         mCenterVertically = a.getBoolean(R.styleable.BubbleTextView_centerVertically, false);
@@ -191,7 +179,6 @@ public class BubbleTextView extends TextView implements ItemInfoUpdateReceiver, 
         a.recycle();
 
         mLongPressHelper = new CheckLongPressHelper(this);
-        mStylusEventHelper = new StylusEventHelper(new SimpleOnStylusPressListener(this), this);
 
         mDotParams = new DotRenderer.DrawParams();
 
@@ -332,42 +319,21 @@ public class BubbleTextView extends TextView implements ItemInfoUpdateReceiver, 
     @Override
     public boolean onTouchEvent(MotionEvent event) {
         // ignore events if they happen in padding area
-        if (event.getAction() == MotionEvent.ACTION_DOWN && mIgnorePaddingTouch
+        if (event.getAction() == MotionEvent.ACTION_DOWN
                 && (event.getY() < getPaddingTop()
                 || event.getX() < getPaddingLeft()
                 || event.getY() > getHeight() - getPaddingBottom()
                 || event.getX() > getWidth() - getPaddingRight())) {
             return false;
         }
-
-        // Call the superclass onTouchEvent first, because sometimes it changes the state to
-        // isPressed() on an ACTION_UP
-        boolean result = super.onTouchEvent(event);
-
-        // Check for a stylus button press, if it occurs cancel any long press checks.
-        if (mStylusEventHelper.onMotionEvent(event)) {
-            mLongPressHelper.cancelLongPress();
-            result = true;
+        if (isLongClickable()) {
+            super.onTouchEvent(event);
+            mLongPressHelper.onTouchEvent(event);
+            // Keep receiving the rest of the events
+            return true;
+        } else {
+            return super.onTouchEvent(event);
         }
-
-        switch (event.getAction()) {
-            case MotionEvent.ACTION_DOWN:
-                // If we're in a stylus button press, don't check for long press.
-                if (!mStylusEventHelper.inStylusButtonPressed()) {
-                    mLongPressHelper.postCheckForLongPress();
-                }
-                break;
-            case MotionEvent.ACTION_CANCEL:
-            case MotionEvent.ACTION_UP:
-                mLongPressHelper.cancelLongPress();
-                break;
-            case MotionEvent.ACTION_MOVE:
-                if (!Utilities.pointInView(this, event.getX(), event.getY(), mSlop)) {
-                    mLongPressHelper.cancelLongPress();
-                }
-                break;
-        }
-        return result;
     }
 
     void setStayPressed(boolean stayPressed) {
@@ -530,7 +496,6 @@ public class BubbleTextView extends TextView implements ItemInfoUpdateReceiver, 
     @Override
     public void cancelLongPress() {
         super.cancelLongPress();
-
         mLongPressHelper.cancelLongPress();
     }
 
@@ -700,5 +665,25 @@ public class BubbleTextView extends TextView implements ItemInfoUpdateReceiver, 
 
     public int getIconSize() {
         return mIconSize;
+    }
+
+    @Override
+    public int getViewType() {
+        return DRAGGABLE_ICON;
+    }
+
+    @Override
+    public void getVisualDragBounds(Rect bounds) {
+        DeviceProfile grid = mActivity.getDeviceProfile();
+        BubbleTextView.getIconBounds(this, bounds, grid.iconSizePx);
+    }
+
+    @Override
+    public void prepareDrawDragView() {
+        if (getIcon() instanceof FastBitmapDrawable) {
+            FastBitmapDrawable icon = (FastBitmapDrawable) getIcon();
+            icon.setScale(1f);
+        }
+        setForceHideDot(true);
     }
 }

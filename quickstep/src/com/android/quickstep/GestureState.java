@@ -64,6 +64,8 @@ public class GestureState implements RecentsAnimationCallbacks.RecentsAnimationL
     private static final String TAG = "GestureState";
 
     private static final ArrayList<String> STATE_NAMES = new ArrayList<>();
+    public static final GestureState DEFAULT_STATE = new GestureState();
+
     private static int FLAG_COUNT = 0;
     private static int getFlagForIndex(String name) {
         if (DEBUG_STATES) {
@@ -103,6 +105,10 @@ public class GestureState implements RecentsAnimationCallbacks.RecentsAnimationL
     public static final int STATE_RECENTS_ANIMATION_ENDED =
             getFlagForIndex("STATE_RECENTS_ANIMATION_ENDED");
 
+    // Called when RecentsView stops scrolling and settles on a TaskView.
+    public static final int STATE_RECENTS_SCROLLING_FINISHED =
+            getFlagForIndex("STATE_RECENTS_SCROLLING_FINISHED");
+
 
     // Needed to interact with the current activity
     private final Intent mHomeIntent;
@@ -122,6 +128,17 @@ public class GestureState implements RecentsAnimationCallbacks.RecentsAnimationL
         mActivityInterface = componentObserver.getActivityInterface();
         mStateCallback = new MultiStateCallback(STATE_NAMES.toArray(new String[0]));
         mGestureId = gestureId;
+    }
+
+    public GestureState(GestureState other) {
+        mHomeIntent = other.mHomeIntent;
+        mOverviewIntent = other.mOverviewIntent;
+        mActivityInterface = other.mActivityInterface;
+        mStateCallback = other.mStateCallback;
+        mGestureId = other.mGestureId;
+        mRunningTask = other.mRunningTask;
+        mEndTarget = other.mEndTarget;
+        mFinishingRecentsAnimationTaskId = other.mFinishingRecentsAnimationTaskId;
     }
 
     public GestureState() {

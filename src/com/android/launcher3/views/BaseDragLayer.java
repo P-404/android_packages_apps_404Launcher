@@ -23,12 +23,17 @@ import static android.view.MotionEvent.ACTION_UP;
 import static com.android.launcher3.util.DefaultDisplay.getSingleFrameMs;
 
 import android.annotation.TargetApi;
+import android.app.WallpaperInfo;
+import android.app.WallpaperManager;
+import android.content.ComponentName;
 import android.content.Context;
+import android.content.Intent;
 import android.graphics.Insets;
 import android.graphics.Rect;
 import android.graphics.RectF;
 import android.os.Build;
 import android.util.AttributeSet;
+import android.util.Log;
 import android.util.Property;
 import android.view.MotionEvent;
 import android.view.View;
@@ -38,12 +43,16 @@ import android.view.WindowInsets;
 import android.view.accessibility.AccessibilityEvent;
 import android.widget.FrameLayout;
 
+import androidx.annotation.Nullable;
+
 import com.android.launcher3.AbstractFloatingView;
 import com.android.launcher3.InsettableFrameLayout;
-import com.android.launcher3.Launcher;
+import com.android.launcher3.R;
 import com.android.launcher3.Utilities;
+import com.android.launcher3.testing.TestProtocol;
 import com.android.launcher3.util.MultiValueAlpha;
 import com.android.launcher3.util.MultiValueAlpha.AlphaProperty;
+import com.android.launcher3.util.SimpleBroadcastReceiver;
 import com.android.launcher3.util.TouchController;
 
 import java.io.PrintWriter;
@@ -99,6 +108,10 @@ public abstract class BaseDragLayer<T extends Context & ActivityContext>
 
     protected final T mActivity;
     private final MultiValueAlpha mMultiValueAlpha;
+    private final WallpaperManager mWallpaperManager;
+    private final SimpleBroadcastReceiver mWallpaperChangeReceiver =
+            new SimpleBroadcastReceiver(this::onWallpaperChanged);
+    private final String[] mWallpapersWithoutSysuiScrims;
 
     // All the touch controllers for the view
     protected TouchController[] mControllers;
@@ -109,11 +122,21 @@ public abstract class BaseDragLayer<T extends Context & ActivityContext>
 
     private TouchCompleteListener mTouchCompleteListener;
 
+    protected boolean mAllowSysuiScrims = true;
+
     public BaseDragLayer(Context context, AttributeSet attrs, int alphaChannelCount) {
         super(context, attrs);
         mActivity = (T) ActivityContext.lookupContext(context);
         mMultiValueAlpha = new MultiValueAlpha(this, alphaChannelCount);
+        mWallpaperManager = context.getSystemService(WallpaperManager.class);
+        mWallpapersWithoutSysuiScrims = getResources().getStringArray(
+                R.array.live_wallpapers_remove_sysui_scrims);
     }
+
+    /**
+     * Called to reinitialize touch controllers.
+     */
+    public abstract void recreateControllers();
 
     /**
      * Same as {@link #isEventOverView(View, MotionEvent, View)} where evView == this drag layer.
@@ -252,6 +275,9 @@ public abstract class BaseDragLayer<T extends Context & ActivityContext>
 
     @Override
     public boolean dispatchTouchEvent(MotionEvent ev) {
+        if (Utilities.IS_RUNNING_IN_TEST_HARNESS) {
+            Log.d(TestProtocol.NO_SCROLL_END_WIDGETS, "BaseDragLayer: " + ev);
+        }
         switch (ev.getAction()) {
             case ACTION_DOWN: {
                 mTouchDispatchState |= TOUCH_DISPATCHING_VIEW;
@@ -512,5 +538,47 @@ public abstract class BaseDragLayer<T extends Context & ActivityContext>
                     gestureInsets.right, gestureInsets.bottom);
         }
         return super.dispatchApplyWindowInsets(insets);
+    }
+
+    @Override
+    protected void onAttachedToWindow() {
+        super.onAttachedToWindow();
+        mWallpaperChangeReceiver.register(mActivity, Intent.ACTION_WALLPAPER_CHANGED);
+        onWallpaperChanged(null);
+    }
+
+    @Override
+    protected void onDetachedFromWindow() {
+        super.onDetachedFromWindow();
+        mActivity.unregisterReceiver(mWallpaperChangeReceiver);
+    }
+
+    private void onWallpaperChanged(Intent unusedBroadcastIntent) {
+        WallpaperInfo newWallpaperInfo = mWallpaperManager.getWallpaperInfo();
+        boolean oldAllowSysuiScrims = mAllowSysuiScrims;
+        mAllowSysuiScrims = computeAllowSysuiScrims(newWallpaperInfo);
+        if (mAllowSysuiScrims != oldAllowSysuiScrims) {
+            // Reapply insets so scrim can be removed or re-added if necessary.
+            setInsets(mInsets);
+        }
+    }
+
+    /**
+     * Determines whether we can scrim the status bar and nav bar for the given wallpaper by
+     * checking against a list of live wallpapers that we don't show the scrims on.
+     */
+    private boolean computeAllowSysuiScrims(@Nullable WallpaperInfo newWallpaperInfo) {
+        if (newWallpaperInfo == null) {
+            // New wallpaper is static, not live. Thus, blacklist isn't applicable.
+            return true;
+        }
+        ComponentName newWallpaper = newWallpaperInfo.getComponent();
+        for (String wallpaperWithoutScrim : mWallpapersWithoutSysuiScrims) {
+            if (newWallpaper.equals(ComponentName.unflattenFromString(wallpaperWithoutScrim))) {
+                // New wallpaper is blacklisted from showing a scrim.
+                return false;
+            }
+        }
+        return true;
     }
 }

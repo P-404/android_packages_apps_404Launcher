@@ -97,6 +97,8 @@ public final class LauncherInstrumentation {
     private static final Pattern EVENT_TOUCH_UP = getTouchEventPattern("ACTION_UP");
     private static final Pattern EVENT_TOUCH_CANCEL = getTouchEventPattern("ACTION_CANCEL");
     private static final Pattern EVENT_PILFER_POINTERS = Pattern.compile("pilferPointers");
+    static final Pattern EVENT_START_ACTIVITY = Pattern.compile("Activity\\.onStart");
+    static final Pattern EVENT_STOP_ACTIVITY = Pattern.compile("Activity\\.onStop");
 
     static final Pattern EVENT_TOUCH_DOWN_TIS = getTouchEventPatternTIS("ACTION_DOWN");
     static final Pattern EVENT_TOUCH_UP_TIS = getTouchEventPatternTIS("ACTION_UP");
@@ -316,7 +318,7 @@ public final class LauncherInstrumentation {
         };
     }
 
-    private void dumpViewHierarchy() {
+    public void dumpViewHierarchy() {
         final ByteArrayOutputStream stream = new ByteArrayOutputStream();
         try {
             mDevice.dumpWindowHierarchy(stream);
@@ -332,15 +334,21 @@ public final class LauncherInstrumentation {
 
     private String getSystemAnomalyMessage() {
         try {
+            final StringBuilder sb = new StringBuilder();
+
             UiObject2 object = mDevice.findObject(By.res("android", "alertTitle"));
             if (object != null) {
-                return "System alert popup is visible: " + object.getText();
+                sb.append("TITLE: ").append(object.getText());
             }
 
             object = mDevice.findObject(By.res("android", "message"));
             if (object != null) {
-                return "Message popup by " + object.getApplicationPackage() + " is visible: "
-                        + object.getText();
+                sb.append(" PACKAGE: ").append(object.getApplicationPackage())
+                        .append(" MESSAGE: ").append(object.getText());
+            }
+
+            if (sb.length() != 0) {
+                return "System alert popup is visible: " + sb;
             }
 
             if (hasSystemUiObject("keyguard_status_view")) return "Phone is locked";
@@ -637,6 +645,7 @@ public final class LauncherInstrumentation {
             // otherwise waitForIdle may return immediately in case when there was a big enough
             // pause in accessibility events prior to pressing Home.
             final String action;
+            final boolean launcherWasVisible = isLauncherVisible();
             if (getNavigationModel() == NavigationModel.ZERO_BUTTON) {
                 checkForAnomaly();
 
@@ -665,22 +674,29 @@ public final class LauncherInstrumentation {
                                 displaySize.x / 2, displaySize.y - 1,
                                 displaySize.x / 2, 0,
                                 ZERO_BUTTON_STEPS_FROM_BACKGROUND_TO_HOME, NORMAL_STATE_ORDINAL,
-                                hasLauncherObject(By.textStartsWith(""))
+                                launcherWasVisible
                                         ? GestureScope.INSIDE_TO_OUTSIDE
                                         : GestureScope.OUTSIDE);
                     }
+                    if (!launcherWasVisible) {
+                        expectEvent(TestProtocol.SEQUENCE_MAIN, EVENT_START_ACTIVITY);
+                    }
                 }
             } else {
+                if (!launcherWasVisible) {
+                    expectEvent(TestProtocol.SEQUENCE_MAIN, EVENT_START_ACTIVITY);
+                }
                 log("Hierarchy before clicking home:");
                 dumpViewHierarchy();
                 log(action = "clicking home button from " + getVisibleStateMessage());
                 try (LauncherInstrumentation.Closable c = addContextLayer(action)) {
                     mDevice.waitForIdle();
 
-                    if (getNavigationModel() == NavigationModel.TWO_BUTTON) {
+                    if (!isLauncher3() && getNavigationModel() == NavigationModel.TWO_BUTTON) {
                         expectEvent(TestProtocol.SEQUENCE_TIS, EVENT_TOUCH_DOWN_TIS);
                         expectEvent(TestProtocol.SEQUENCE_TIS, EVENT_TOUCH_UP_TIS);
                     }
+
                     runToState(
                             waitForSystemUiObject("home")::click,
                             NORMAL_STATE_ORDINAL,
@@ -695,6 +711,11 @@ public final class LauncherInstrumentation {
                 return getWorkspace();
             }
         }
+    }
+
+    boolean isLauncherVisible() {
+        mDevice.waitForIdle();
+        return hasLauncherObject(By.textStartsWith(""));
     }
 
     /**
@@ -956,13 +977,13 @@ public final class LauncherInstrumentation {
 
     int getBottomGestureMarginInContainer(UiObject2 container) {
         final int bottomGestureStartOnScreen = getRealDisplaySize().y - getBottomGestureSize();
-        return container.getVisibleBounds().bottom - bottomGestureStartOnScreen;
+        return getVisibleBounds(container).bottom - bottomGestureStartOnScreen;
     }
 
     void clickLauncherObject(UiObject2 object) {
         expectEvent(TestProtocol.SEQUENCE_MAIN, LauncherInstrumentation.EVENT_TOUCH_DOWN);
         expectEvent(TestProtocol.SEQUENCE_MAIN, LauncherInstrumentation.EVENT_TOUCH_UP);
-        if (getNavigationModel() != NavigationModel.THREE_BUTTON) {
+        if (!isLauncher3() && getNavigationModel() != NavigationModel.THREE_BUTTON) {
             expectEvent(TestProtocol.SEQUENCE_TIS, LauncherInstrumentation.EVENT_TOUCH_DOWN_TIS);
             expectEvent(TestProtocol.SEQUENCE_TIS, LauncherInstrumentation.EVENT_TOUCH_UP_TIS);
         }
@@ -974,10 +995,10 @@ public final class LauncherInstrumentation {
             Collection<UiObject2> items,
             int topPaddingInContainer) {
         final UiObject2 lowestItem = Collections.max(items, (i1, i2) ->
-                Integer.compare(i1.getVisibleBounds().top, i2.getVisibleBounds().top));
+                Integer.compare(getVisibleBounds(i1).top, getVisibleBounds(i2).top));
 
-        final int itemRowCurrentTopOnScreen = lowestItem.getVisibleBounds().top;
-        final Rect containerRect = container.getVisibleBounds();
+        final int itemRowCurrentTopOnScreen = getVisibleBounds(lowestItem).top;
+        final Rect containerRect = getVisibleBounds(container);
         final int itemRowNewTopOnScreen = containerRect.top + topPaddingInContainer;
         final int distance = itemRowCurrentTopOnScreen - itemRowNewTopOnScreen + getTouchSlop();
 
@@ -996,7 +1017,7 @@ public final class LauncherInstrumentation {
 
     void scroll(
             UiObject2 container, Direction direction, Rect margins, int steps, boolean slowDown) {
-        final Rect rect = container.getVisibleBounds();
+        final Rect rect = getVisibleBounds(container);
         if (margins != null) {
             rect.left += margins.left;
             rect.top += margins.top;
@@ -1104,24 +1125,25 @@ public final class LauncherInstrumentation {
 
     public void sendPointer(long downTime, long currentTime, int action, Point point,
             GestureScope gestureScope) {
+        final boolean notLauncher3 = !isLauncher3();
         switch (action) {
             case MotionEvent.ACTION_DOWN:
                 if (gestureScope != GestureScope.OUTSIDE) {
                     expectEvent(TestProtocol.SEQUENCE_MAIN, EVENT_TOUCH_DOWN);
                 }
-                if (getNavigationModel() != NavigationModel.THREE_BUTTON) {
+                if (notLauncher3 && getNavigationModel() != NavigationModel.THREE_BUTTON) {
                     expectEvent(TestProtocol.SEQUENCE_TIS, EVENT_TOUCH_DOWN_TIS);
                 }
                 break;
             case MotionEvent.ACTION_UP:
-                if (gestureScope != GestureScope.INSIDE) {
-                    expectEvent(TestProtocol.SEQUENCE_MAIN, EVENT_PILFER_POINTERS);
+                if (notLauncher3 && gestureScope != GestureScope.INSIDE) {
+                    expectEvent(TestProtocol.SEQUENCE_PILFER, EVENT_PILFER_POINTERS);
                 }
                 if (gestureScope != GestureScope.OUTSIDE) {
                     expectEvent(TestProtocol.SEQUENCE_MAIN, gestureScope == GestureScope.INSIDE
                             ? EVENT_TOUCH_UP : EVENT_TOUCH_CANCEL);
                 }
-                if (getNavigationModel() != NavigationModel.THREE_BUTTON) {
+                if (notLauncher3 && getNavigationModel() != NavigationModel.THREE_BUTTON) {
                     expectEvent(TestProtocol.SEQUENCE_TIS, EVENT_TOUCH_UP_TIS);
                 }
                 break;
@@ -1157,10 +1179,12 @@ public final class LauncherInstrumentation {
     }
 
     @NonNull
-    UiObject2 clickAndGet(@NonNull final UiObject2 target, @NonNull String resName) {
+    UiObject2 clickAndGet(
+            @NonNull final UiObject2 target, @NonNull String resName, Pattern longClickEvent) {
         final Point targetCenter = target.getVisibleCenter();
         final long downTime = SystemClock.uptimeMillis();
         sendPointer(downTime, downTime, MotionEvent.ACTION_DOWN, targetCenter, GestureScope.INSIDE);
+        expectEvent(TestProtocol.SEQUENCE_MAIN, longClickEvent);
         final UiObject2 result = waitForLauncherObject(resName);
         sendPointer(downTime, SystemClock.uptimeMillis(), MotionEvent.ACTION_UP, targetCenter,
                 GestureScope.INSIDE);
@@ -1239,6 +1263,10 @@ public final class LauncherInstrumentation {
                 TestProtocol.TEST_INFO_RESPONSE_FIELD);
     }
 
+    public void disableSensorRotation() {
+        getTestInfo(TestProtocol.REQUEST_MOCK_SENSOR_ROTATION);
+    }
+
     public void disableDebugTracing() {
         getTestInfo(TestProtocol.REQUEST_DISABLE_DEBUG_TRACING);
     }
@@ -1276,11 +1304,6 @@ public final class LauncherInstrumentation {
 
     public Closable eventsCheck() {
         Assert.assertTrue("Nested event checking", !sCheckingEvents);
-        if ("com.android.launcher3".equals(getLauncherPackageName())) {
-            // Not checking specific Launcher3 event sequences.
-            return () -> {
-            };
-        }
         sCheckingEvents = true;
         mExpectedPid = getPid();
         if (sEventChecker == null) sEventChecker = new LogEventChecker();
@@ -1304,7 +1327,20 @@ public final class LauncherInstrumentation {
         };
     }
 
+    boolean isLauncher3() {
+        return "com.android.launcher3".equals(getLauncherPackageName());
+    }
+
     void expectEvent(String sequence, Pattern expected) {
         if (sCheckingEvents) sEventChecker.expectPattern(sequence, expected);
+    }
+
+    Rect getVisibleBounds(UiObject2 object) {
+        try {
+            return object.getVisibleBounds();
+        } catch (Throwable t) {
+            fail(t.toString());
+            return null;
+        }
     }
 }

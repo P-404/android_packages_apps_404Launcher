@@ -46,7 +46,9 @@
     <uses-permission android:name="android.permission.READ_DEVICE_CONFIG" />
     <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
 
-
+    <!-- TODO(b/150802536): Enabled only for ENABLE_FIXED_ROTATION_TRANSFORM feature flag -->
+    <uses-permission android:name="android.permission.WRITE_SECURE_SETTINGS"/>
+    
     <!--
     Permissions required for read/write access to the workspace data. These permission name
     should not conflict with that defined in other apps, as such an app should embed its package
@@ -134,14 +136,6 @@
                 <action android:name="android.content.pm.action.CONFIRM_PIN_APPWIDGET" />
             </intent-filter>
         </activity>
-
-        <!--
-        Should point to the content provider which can be used to dump Launcher3 compatible
-        worspace configuration to the dump's file descriptor by using launcher_dump.proto
-        -->
-        <meta-data
-            android:name="com.android.launcher3.launcher_dump_provider"
-            android:value="com.android.launcher3.LauncherProvider" />
 
         <!--
         The settings provider contains Home's data, like the workspace favorites. The permissions

@@ -41,6 +41,7 @@ import com.android.launcher3.util.PackageManagerHelper;
 import com.android.launcher3.util.Themes;
 
 import java.net.URISyntaxException;
+import java.util.ArrayList;
 
 /**
  * Drop target which provides a secondary option for an item.
@@ -107,7 +108,7 @@ public class SecondaryDropTarget extends ButtonDropTarget implements OnAlarmList
             updateText(R.string.uninstall_drop_target_label);
         } else if (action == DISMISS_PREDICTION) {
             mHoverColor = Themes.getColorAccent(getContext());
-            setDrawable(R.drawable.ic_block);
+            setDrawable(R.drawable.ic_block_shadow);
             updateText(R.string.dismiss_prediction_label);
         } else if (action == RECONFIGURE) {
             mHoverColor = Themes.getColorAccent(getContext());
@@ -322,9 +323,9 @@ public class SecondaryDropTarget extends ButtonDropTarget implements OnAlarmList
         }
 
         @Override
-        public void fillInLogContainerData(View v, ItemInfo info, Target target,
-                Target targetParent) {
-            mOriginal.fillInLogContainerData(v, info, target, targetParent);
+        public void fillInLogContainerData(ItemInfo childInfo, Target child,
+                ArrayList<Target> parents) {
+            mOriginal.fillInLogContainerData(childInfo, child, parents);
         }
 
         @Override

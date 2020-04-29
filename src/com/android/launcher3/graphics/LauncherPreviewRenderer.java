@@ -21,7 +21,6 @@ import static android.view.View.VISIBLE;
 
 import static com.android.launcher3.config.FeatureFlags.ENABLE_LAUNCHER_PREVIEW_IN_GRID_PICKER;
 import static com.android.launcher3.config.FeatureFlags.MULTI_DB_GRID_MIRATION_ALGO;
-import static com.android.launcher3.model.GridSizeMigrationTask.needsToMigrate;
 import static com.android.launcher3.model.ModelUtils.filterCurrentWorkspaceItems;
 import static com.android.launcher3.model.ModelUtils.sortWorkspaceItemsSpatially;
 import static com.android.launcher3.util.Executors.MODEL_EXECUTOR;
@@ -262,6 +261,13 @@ public class LauncherPreviewRenderer implements Callable<Bitmap> {
         });
     }
 
+    /** Populate preview and render it. */
+    public View getRenderedView() {
+        MainThreadRenderer renderer = new MainThreadRenderer(mContext);
+        renderer.populate();
+        return renderer.mRootView;
+    }
+
     private class MainThreadRenderer extends ContextThemeWrapper
             implements ActivityContext, WorkspaceLayoutManager, LayoutInflater.Factory2 {
 
@@ -388,9 +394,12 @@ public class LauncherPreviewRenderer implements Callable<Bitmap> {
             }
         }
 
-        private void renderScreenShot(Canvas canvas) {
+        private void populate() {
             if (ENABLE_LAUNCHER_PREVIEW_IN_GRID_PICKER.get()) {
-                boolean needsToMigrate = needsToMigrate(mContext, mIdp);
+                boolean needsToMigrate =
+                        MULTI_DB_GRID_MIRATION_ALGO.get()
+                                ? GridSizeMigrationTaskV2.needsToMigrate(mContext, mIdp)
+                                : GridSizeMigrationTask.needsToMigrate(mContext, mIdp);
                 boolean success = false;
                 if (needsToMigrate) {
                     success = MULTI_DB_GRID_MIRATION_ALGO.get()
@@ -499,7 +508,10 @@ public class LauncherPreviewRenderer implements Callable<Bitmap> {
             measureView(mRootView, mDp.widthPx, mDp.heightPx);
             // Additional measure for views which use auto text size API
             measureView(mRootView, mDp.widthPx, mDp.heightPx);
+        }
 
+        private void renderScreenShot(Canvas canvas) {
+            populate();
             mRootView.draw(canvas);
             dispatchVisibilityAggregated(mRootView, false);
         }
