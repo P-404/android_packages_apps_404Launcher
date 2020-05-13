@@ -91,6 +91,11 @@ public interface BaseActivityInterface<T extends BaseDraggingActivity> {
         return activity != null && activity.hasBeenResumed();
     }
 
+    default boolean isStarted() {
+        BaseDraggingActivity activity = getCreatedActivity();
+        return activity != null && activity.isStarted();
+    }
+
     @UiThread
     @Nullable
     <T extends View> T getVisibleRecentsView();
@@ -134,8 +139,6 @@ public interface BaseActivityInterface<T extends BaseDraggingActivity> {
         default void onRemoteAnimationReceived(RemoteAnimationTargets targets) { }
 
         void createActivityInterface(long transitionLength);
-
-        default void adjustActivityControllerInterpolators() { }
 
         default void onTransitionCancelled() { }
 

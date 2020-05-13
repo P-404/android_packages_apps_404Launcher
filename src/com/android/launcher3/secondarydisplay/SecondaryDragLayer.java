@@ -30,9 +30,9 @@ import com.android.launcher3.AbstractFloatingView;
 import com.android.launcher3.BubbleTextView;
 import com.android.launcher3.DeviceProfile;
 import com.android.launcher3.InvariantDeviceProfile;
-import com.android.launcher3.ItemInfo;
 import com.android.launcher3.R;
 import com.android.launcher3.allapps.AllAppsContainerView;
+import com.android.launcher3.model.data.ItemInfo;
 import com.android.launcher3.popup.PopupContainerWithArrow;
 import com.android.launcher3.util.ShortcutUtil;
 import com.android.launcher3.util.TouchController;
@@ -117,10 +117,12 @@ public class SecondaryDragLayer extends BaseDragLayer<SecondaryDisplayLauncher> 
             if (child == mAppsView) {
                 int padding = 2 * (grid.desiredWorkspaceLeftRightMarginPx
                         + grid.cellLayoutPaddingLeftRightPx);
-                int maxWidth = grid.allAppsCellWidthPx * idp.numAllAppsColumns + padding;
 
+                int maxWidth = grid.allAppsCellWidthPx * idp.numAllAppsColumns + padding;
                 int appsWidth = Math.min(width, maxWidth);
-                int appsHeight = Math.round(appsWidth * (float) height / (float) width);
+
+                int maxHeight = grid.allAppsCellHeightPx * idp.numAllAppsColumns + padding;
+                int appsHeight = Math.min(height, maxHeight);
 
                 mAppsView.measure(
                         makeMeasureSpec(appsWidth, EXACTLY), makeMeasureSpec(appsHeight, EXACTLY));

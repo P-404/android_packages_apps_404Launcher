@@ -17,14 +17,7 @@ package com.android.launcher3;
 
 import static com.android.launcher3.AbstractFloatingView.TYPE_ALL;
 import static com.android.launcher3.AbstractFloatingView.TYPE_HIDE_BACK_BUTTON;
-import static com.android.launcher3.LauncherState.ALL_APPS;
 import static com.android.launcher3.LauncherState.NORMAL;
-import static com.android.launcher3.LauncherState.OVERVIEW;
-import static com.android.launcher3.allapps.DiscoveryBounce.BOUNCE_MAX_COUNT;
-import static com.android.launcher3.allapps.DiscoveryBounce.HOME_BOUNCE_COUNT;
-import static com.android.launcher3.allapps.DiscoveryBounce.HOME_BOUNCE_SEEN;
-import static com.android.launcher3.allapps.DiscoveryBounce.SHELF_BOUNCE_COUNT;
-import static com.android.launcher3.allapps.DiscoveryBounce.SHELF_BOUNCE_SEEN;
 import static com.android.quickstep.SysUINavigationMode.removeShelfFromOverview;
 import static com.android.systemui.shared.system.ActivityManagerWrapper.CLOSE_SYSTEM_WINDOWS_REASON_HOME_KEY;
 
@@ -32,13 +25,11 @@ import android.animation.AnimatorSet;
 import android.animation.ValueAnimator;
 import android.content.Intent;
 import android.content.IntentSender;
+import android.content.SharedPreferences;
 import android.os.Bundle;
 import android.os.CancellationSignal;
-import android.view.View;
 
-import com.android.launcher3.LauncherState.ScaleAndTranslation;
 import com.android.launcher3.LauncherStateManager.StateHandler;
-import com.android.launcher3.accessibility.SystemActions;
 import com.android.launcher3.config.FeatureFlags;
 import com.android.launcher3.model.WellbeingModel;
 import com.android.launcher3.popup.SystemShortcut;
@@ -46,17 +37,19 @@ import com.android.launcher3.proxy.ProxyActivityStarter;
 import com.android.launcher3.proxy.StartActivityParams;
 import com.android.launcher3.statehandlers.BackButtonAlphaHandler;
 import com.android.launcher3.statehandlers.DepthController;
-import com.android.launcher3.touch.PagedOrientationHandler;
 import com.android.launcher3.uioverrides.RecentsViewStateController;
+import com.android.launcher3.util.OnboardingPrefs;
 import com.android.launcher3.util.UiThreadHelper;
 import com.android.quickstep.RecentsModel;
 import com.android.quickstep.SysUINavigationMode;
 import com.android.quickstep.SysUINavigationMode.Mode;
 import com.android.quickstep.SysUINavigationMode.NavigationModeChangeListener;
 import com.android.quickstep.SystemUiProxy;
+import com.android.quickstep.util.QuickstepOnboardingPrefs;
 import com.android.quickstep.util.RemoteAnimationProvider;
 import com.android.quickstep.util.RemoteFadeOutAnimationListener;
 import com.android.quickstep.util.ShelfPeekAnim;
+import com.android.quickstep.views.OverviewActionsView;
 import com.android.quickstep.views.RecentsView;
 import com.android.systemui.shared.system.ActivityManagerWrapper;
 import com.android.systemui.shared.system.RemoteAnimationTargetCompat;
@@ -70,7 +63,6 @@ public abstract class BaseQuickstepLauncher extends Launcher
         implements NavigationModeChangeListener {
 
     private DepthController mDepthController = new DepthController(this);
-    protected SystemActions mSystemActions;
 
     /**
      * Reusable command for applying the back button alpha on the background thread.
@@ -81,53 +73,13 @@ public abstract class BaseQuickstepLauncher extends Launcher
 
     private final ShelfPeekAnim mShelfPeekAnim = new ShelfPeekAnim(this);
 
-    private View mActionsView;
+    private OverviewActionsView mActionsView;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        mSystemActions = new SystemActions(this);
 
         SysUINavigationMode.INSTANCE.get(this).addModeChangeListener(this);
-
-        if (!getSharedPrefs().getBoolean(HOME_BOUNCE_SEEN, false)) {
-            getStateManager().addStateListener(new LauncherStateManager.StateListener() {
-                @Override
-                public void onStateTransitionStart(LauncherState toState) { }
-
-                @Override
-                public void onStateTransitionComplete(LauncherState finalState) {
-                    boolean swipeUpEnabled = SysUINavigationMode.INSTANCE
-                            .get(BaseQuickstepLauncher.this).getMode().hasGestures;
-                    LauncherState prevState = getStateManager().getLastState();
-
-                    if (((swipeUpEnabled && finalState == OVERVIEW) || (!swipeUpEnabled
-                            && finalState == ALL_APPS && prevState == NORMAL) || BOUNCE_MAX_COUNT
-                            <= getSharedPrefs().getInt(HOME_BOUNCE_COUNT, 0))) {
-                        getSharedPrefs().edit().putBoolean(HOME_BOUNCE_SEEN, true).apply();
-                        getStateManager().removeStateListener(this);
-                    }
-                }
-            });
-        }
-
-        if (!getSharedPrefs().getBoolean(SHELF_BOUNCE_SEEN, false)) {
-            getStateManager().addStateListener(new LauncherStateManager.StateListener() {
-                @Override
-                public void onStateTransitionStart(LauncherState toState) { }
-
-                @Override
-                public void onStateTransitionComplete(LauncherState finalState) {
-                    LauncherState prevState = getStateManager().getLastState();
-
-                    if ((finalState == ALL_APPS && prevState == OVERVIEW) || BOUNCE_MAX_COUNT
-                            <= getSharedPrefs().getInt(SHELF_BOUNCE_COUNT, 0)) {
-                        getSharedPrefs().edit().putBoolean(SHELF_BOUNCE_SEEN, true).apply();
-                        getStateManager().removeStateListener(this);
-                    }
-                }
-            });
-        }
     }
 
     @Override
@@ -139,12 +91,6 @@ public abstract class BaseQuickstepLauncher extends Launcher
     @Override
     public void onNavigationModeChanged(Mode newMode) {
         getDragLayer().recreateControllers();
-    }
-
-    @Override
-    public void onActivityResult(int requestCode, int resultCode, Intent data) {
-        super.onActivityResult(requestCode, resultCode, data);
-        mSystemActions.onActivityResult(requestCode);
     }
 
     @Override
@@ -210,34 +156,25 @@ public abstract class BaseQuickstepLauncher extends Launcher
             // removes the task itself.
             startActivity(ProxyActivityStarter.getLaunchIntent(this, null));
         }
-
-        // Register all system actions once they are available
-        mSystemActions.register();
-    }
-
-    @Override
-    protected void onPause() {
-        super.onPause();
-        mSystemActions.unregister();
     }
 
     @Override
     protected void setupViews() {
         super.setupViews();
-        mActionsView = findViewById(R.id.overview_actions_view);
 
+        SysUINavigationMode.INSTANCE.get(this).updateMode();
+        mActionsView = findViewById(R.id.overview_actions_view);
+        ((RecentsView) getOverviewPanel()).init(mActionsView);
 
         if (FeatureFlags.ENABLE_OVERVIEW_ACTIONS.get() && removeShelfFromOverview(this)) {
             // Overview is above all other launcher elements, including qsb, so move it to the top.
             getOverviewPanel().bringToFront();
-            if (mActionsView != null) {
-                mActionsView.bringToFront();
-            }
+            mActionsView.bringToFront();
         }
     }
 
-    public View getActionsView() {
-        return mActionsView;
+    public <T extends OverviewActionsView> T getActionsView() {
+        return (T) mActionsView;
     }
 
     @Override
@@ -262,14 +199,9 @@ public abstract class BaseQuickstepLauncher extends Launcher
     }
 
     @Override
-    protected ScaleAndTranslation getOverviewScaleAndTranslationForNormalState() {
-        if (SysUINavigationMode.getMode(this) == Mode.NO_BUTTON) {
-            PagedOrientationHandler layoutVertical =
-                ((RecentsView)getOverviewPanel()).getPagedViewOrientedState().getOrientationHandler();
-            return layoutVertical.getScaleAndTranslation(getDeviceProfile(),
-                getOverviewPanel());
-        }
-        return super.getOverviewScaleAndTranslationForNormalState();
+    protected OnboardingPrefs createOnboardingPrefs(SharedPreferences sharedPrefs,
+            LauncherStateManager stateManager) {
+        return new QuickstepOnboardingPrefs(this, sharedPrefs, stateManager);
     }
 
     @Override
@@ -292,6 +224,12 @@ public abstract class BaseQuickstepLauncher extends Launcher
                 return anim;
             }
         }, signal);
+    }
+
+    @Override
+    public float[] getNormalOverviewScaleAndOffset() {
+        return SysUINavigationMode.getMode(this) == Mode.NO_BUTTON
+                ? new float[] {1, 1} : new float[] {1.1f, 0};
     }
 
     @Override

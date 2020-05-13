@@ -31,7 +31,6 @@ import android.graphics.PointF;
 import android.graphics.Rect;
 import android.graphics.RectF;
 import android.os.Build;
-import android.util.Log;
 import android.util.Pair;
 import android.view.MotionEvent;
 import android.view.View;
@@ -46,11 +45,7 @@ import com.android.launcher3.R;
 import com.android.launcher3.Utilities;
 import com.android.launcher3.anim.AnimationSuccessListener;
 import com.android.launcher3.anim.AnimatorPlaybackController;
-import com.android.launcher3.model.PagedViewOrientedState;
-import com.android.launcher3.states.RotationHelper;
-import com.android.launcher3.testing.TestProtocol;
 import com.android.launcher3.touch.PagedOrientationHandler;
-import com.android.launcher3.touch.PortraitPagedViewHandler;
 import com.android.launcher3.util.VibratorWrapper;
 import com.android.launcher3.views.FloatingIconView;
 import com.android.quickstep.BaseActivityInterface.HomeAnimationFactory;
@@ -59,6 +54,7 @@ import com.android.quickstep.util.ActiveGestureLog;
 import com.android.quickstep.util.ActivityInitListener;
 import com.android.quickstep.util.AppWindowAnimationHelper;
 import com.android.quickstep.util.AppWindowAnimationHelper.TransformParams;
+import com.android.quickstep.util.RecentsOrientedState;
 import com.android.quickstep.util.RectFSpringAnim;
 import com.android.quickstep.views.RecentsView;
 import com.android.quickstep.views.TaskView;
@@ -127,7 +123,7 @@ public abstract class BaseSwipeUpHandler<T extends BaseDraggingActivity, Q exten
     protected boolean mCanceled;
     protected int mFinishingRecentsAnimationForNewTaskId = -1;
 
-    private PagedViewOrientedState mOrientedState;
+    private RecentsOrientedState mOrientedState;
 
     protected BaseSwipeUpHandler(Context context, RecentsAnimationDeviceState deviceState,
             GestureState gestureState, InputConsumerController inputConsumer) {
@@ -135,13 +131,19 @@ public abstract class BaseSwipeUpHandler<T extends BaseDraggingActivity, Q exten
         mDeviceState = deviceState;
         mGestureState = gestureState;
         mActivityInterface = gestureState.getActivityInterface();
-        mActivityInitListener =
-                mActivityInterface.createActivityInitListener(this::onActivityInit);
+        mActivityInitListener = mActivityInterface.createActivityInitListener(this::onActivityInit);
         mInputConsumer = inputConsumer;
         mAppWindowAnimationHelper = new AppWindowAnimationHelper(context);
         mPageSpacing = context.getResources().getDimensionPixelSize(R.dimen.recents_page_spacing);
+    }
+
+    /**
+     * To be called at the end of constructor of subclasses. This calls various methods which can
+     * depend on proper class initialization.
+     */
+    protected void initAfterSubclassConstructor() {
         initTransitionEndpoints(InvariantDeviceProfile.INSTANCE.get(mContext)
-            .getDeviceProfile(mContext));
+                .getDeviceProfile(mContext));
     }
 
     protected void performHapticFeedback() {
@@ -199,49 +201,30 @@ public abstract class BaseSwipeUpHandler<T extends BaseDraggingActivity, Q exten
     }
 
     protected void startNewTask(int successStateFlag, Consumer<Boolean> resultCallback) {
-        if (TestProtocol.sDebugTracing) {
-            Log.d(TestProtocol.NO_START_FROM_RECENTS, "startNewTask1");
-        }
         // Launch the task user scrolled to (mRecentsView.getNextPage()).
         if (ENABLE_QUICKSTEP_LIVE_TILE.get()) {
             // We finish recents animation inside launchTask() when live tile is enabled.
             mRecentsView.getNextPageTaskView().launchTask(false /* animate */,
                     true /* freezeTaskList */);
         } else {
-            if (TestProtocol.sDebugTracing) {
-                Log.d(TestProtocol.NO_START_FROM_RECENTS, "startNewTask2");
-            }
             int taskId = mRecentsView.getNextPageTaskView().getTask().key.id;
-            mFinishingRecentsAnimationForNewTaskId = taskId;
-            mRecentsAnimationController.finish(true /* toRecents */, () -> {
-                if (TestProtocol.sDebugTracing) {
-                    Log.d(TestProtocol.NO_START_FROM_RECENTS, "onFinishComplete1");
+            if (!mCanceled) {
+                TaskView nextTask = mRecentsView.getTaskView(taskId);
+                if (nextTask != null) {
+                    nextTask.launchTask(false /* animate */, true /* freezeTaskList */,
+                            success -> {
+                                resultCallback.accept(success);
+                                if (!success) {
+                                    mActivityInterface.onLaunchTaskFailed();
+                                    nextTask.notifyTaskLaunchFailed(TAG);
+                                } else {
+                                    mActivityInterface.onLaunchTaskSuccess();
+                                }
+                            }, MAIN_EXECUTOR.getHandler());
                 }
-                if (!mCanceled) {
-                    if (TestProtocol.sDebugTracing) {
-                        Log.d(TestProtocol.NO_START_FROM_RECENTS, "onFinishComplete2");
-                    }
-                    TaskView nextTask = mRecentsView.getTaskView(taskId);
-                    if (nextTask != null) {
-                        if (TestProtocol.sDebugTracing) {
-                            Log.d(TestProtocol.NO_START_FROM_RECENTS, "onFinishComplete3");
-                        }
-                        nextTask.launchTask(false /* animate */, true /* freezeTaskList */,
-                                success -> {
-                                    resultCallback.accept(success);
-                                    if (!success) {
-                                        mActivityInterface.onLaunchTaskFailed();
-                                        nextTask.notifyTaskLaunchFailed(TAG);
-                                    } else {
-                                        mActivityInterface.onLaunchTaskSuccess();
-                                    }
-                                }, MAIN_EXECUTOR.getHandler());
-                    }
-                    mStateCallback.setStateOnUiThread(successStateFlag);
-                }
-                mCanceled = false;
-                mFinishingRecentsAnimationForNewTaskId = -1;
-            });
+                mStateCallback.setStateOnUiThread(successStateFlag);
+            }
+            mCanceled = false;
         }
         ActiveGestureLog.INSTANCE.addLog("finishRecentsAnimation", true);
     }
@@ -263,6 +246,10 @@ public abstract class BaseSwipeUpHandler<T extends BaseDraggingActivity, Q exten
      */
     protected boolean hasTargets() {
         return mRecentsAnimationTargets != null && mRecentsAnimationTargets.hasTargets();
+    }
+
+    protected void updateSource(Rect stackBounds, RemoteAnimationTargetCompat runningTarget) {
+        mAppWindowAnimationHelper.updateSource(stackBounds, runningTarget);
     }
 
     @Override
@@ -288,7 +275,7 @@ public abstract class BaseSwipeUpHandler<T extends BaseDraggingActivity, Q exten
         dp.updateInsets(targets.homeContentInsets);
         dp.updateIsSeascape(mContext);
         if (runningTaskTarget != null) {
-            mAppWindowAnimationHelper.updateSource(overviewStackBounds, runningTaskTarget);
+            updateSource(overviewStackBounds, runningTaskTarget);
         }
 
         mAppWindowAnimationHelper.prepareAnimation(dp, false /* isOpening */);
@@ -338,6 +325,7 @@ public abstract class BaseSwipeUpHandler<T extends BaseDraggingActivity, Q exten
 
         mTransitionDragLength = mActivityInterface.getSwipeUpDestinationAndLength(
                 dp, mContext, TEMP_RECT);
+
         if (!dp.isMultiWindowMode) {
             // When updating the target rect, also update the home bounds since the location on
             // screen of the launcher window may be stale (position is not updated until first
@@ -346,13 +334,16 @@ public abstract class BaseSwipeUpHandler<T extends BaseDraggingActivity, Q exten
             mAppWindowAnimationHelper.updateHomeBounds(getStackBounds(dp));
         }
         int displayRotation = 0;
-        if (mOrientedState != null) {
+        if (mOrientedState != null && mOrientedState.isMultipleOrientationSupportedByDevice()) {
             // TODO(b/150300347): The first recents animation after launcher is started with the
             //  foreground app not in landscape will look funky until that bug is fixed
             displayRotation = mOrientedState.getDisplayRotation();
+
+            RectF tempRectF = new RectF(TEMP_RECT);
+            mOrientedState.mapRectFromRotation(displayRotation,
+                    tempRectF, dp.widthPx, dp.heightPx);
+            tempRectF.roundOut(TEMP_RECT);
         }
-        RotationHelper.getTargetRectForRotation(TEMP_RECT, dp.widthPx, dp.heightPx,
-            displayRotation);
         mAppWindowAnimationHelper.updateTargetRect(TEMP_RECT);
         if (mDeviceState.isFullyGesturalNavMode()) {
             // We can drag all the way to the top of the screen.
@@ -414,11 +405,15 @@ public abstract class BaseSwipeUpHandler<T extends BaseDraggingActivity, Q exten
 
     public void setIsLikelyToStartNewTask(boolean isLikelyToStartNewTask) { }
 
-    public void initWhenReady() {
+    /**
+     * Registers a callback to run when the activity is ready.
+     * @param intent The intent that will be used to start the activity if it doesn't exist already.
+     */
+    public void initWhenReady(Intent intent) {
         // Preload the plan
         RecentsModel.INSTANCE.get(mContext).getTasks(null);
 
-        mActivityInitListener.register();
+        mActivityInitListener.register(intent);
     }
 
     /**
@@ -426,11 +421,12 @@ public abstract class BaseSwipeUpHandler<T extends BaseDraggingActivity, Q exten
      */
     protected void applyTransformUnchecked() {
         float shift = mCurrentShift.value;
-        float offset = mRecentsView == null ? 0 : mRecentsView.getScrollOffset();
+        float offset = mRecentsView == null ? 0 : mRecentsView.getScrollOffsetScaled();
         float taskSize = getOrientationHandler()
             .getPrimarySize(mAppWindowAnimationHelper.getTargetRect());
         float offsetScale = getTaskCurveScaleForOffset(offset, taskSize);
-        mTransformParams.setProgress(shift)
+        mTransformParams
+                .setProgress(shift)
                 .setOffset(offset)
                 .setOffsetScale(offsetScale)
                 .setTargetSet(mRecentsAnimationTargets)
@@ -447,7 +443,7 @@ public abstract class BaseSwipeUpHandler<T extends BaseDraggingActivity, Q exten
 
     protected PagedOrientationHandler getOrientationHandler() {
         if (mOrientedState == null) {
-            return new PortraitPagedViewHandler();
+            return PagedOrientationHandler.PORTRAIT;
         }
         return mOrientedState.getOrientationHandler();
     }
@@ -468,14 +464,15 @@ public abstract class BaseSwipeUpHandler<T extends BaseDraggingActivity, Q exten
                     .setTargetSet(mRecentsAnimationTargets)
                     .setLauncherOnTop(false)));
         if (isFloatingIconView) {
-            RotationHelper.mapInverseRectFromNormalOrientation(startRect,
-                mDp.widthPx, mDp.heightPx, mOrientedState.getDisplayRotation());
+            mOrientedState.mapInverseRectFromNormalOrientation(
+                    startRect, mDp.widthPx, mDp.heightPx);
         }
         RectFSpringAnim anim = new RectFSpringAnim(startRect, targetRect, mContext);
         if (isFloatingIconView) {
             FloatingIconView fiv = (FloatingIconView) floatingView;
             anim.addAnimatorListener(fiv);
             fiv.setOnTargetChangeListener(anim::onTargetPositionChanged);
+            fiv.setFastFinishRunnable(anim::end);
         }
 
         AnimatorPlaybackController homeAnim = homeAnimationFactory.createActivityAnimationToHome();
@@ -500,8 +497,8 @@ public abstract class BaseSwipeUpHandler<T extends BaseDraggingActivity, Q exten
 
                 rotatedRect.set(currentRect);
                 if (isFloatingIconView) {
-                    RotationHelper.mapRectFromNormalOrientation(rotatedRect,
-                        mDp.widthPx, mDp.heightPx, mOrientedState.getDisplayRotation());
+                    mOrientedState.mapRectFromNormalOrientation(
+                            rotatedRect, mDp.widthPx, mDp.heightPx);
                     mTransformParams.setCornerRadius(endRadius * progress + startRadius
                         * (1f - progress));
                 }

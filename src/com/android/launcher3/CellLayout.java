@@ -33,6 +33,7 @@ import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.Point;
+import android.graphics.PointF;
 import android.graphics.Rect;
 import android.graphics.drawable.ColorDrawable;
 import android.graphics.drawable.Drawable;
@@ -54,18 +55,17 @@ import androidx.core.view.ViewCompat;
 import com.android.launcher3.LauncherSettings.Favorites;
 import com.android.launcher3.accessibility.DragAndDropAccessibilityDelegate;
 import com.android.launcher3.anim.Interpolators;
-import com.android.launcher3.anim.PropertyListBuilder;
 import com.android.launcher3.config.FeatureFlags;
 import com.android.launcher3.dragndrop.DraggableView;
 import com.android.launcher3.folder.PreviewBackground;
 import com.android.launcher3.graphics.DragPreviewProvider;
+import com.android.launcher3.model.data.ItemInfo;
 import com.android.launcher3.util.CellAndSpan;
 import com.android.launcher3.util.GridOccupancy;
 import com.android.launcher3.util.ParcelableSparseArray;
 import com.android.launcher3.util.Themes;
 import com.android.launcher3.util.Thunk;
 import com.android.launcher3.views.ActivityContext;
-import com.android.launcher3.widget.LauncherAppWidgetHostView;
 
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
@@ -98,6 +98,7 @@ public class CellLayout extends ViewGroup {
     // return an (x, y) value from helper functions. Do NOT use them to maintain other state.
     @Thunk final int[] mTmpPoint = new int[2];
     @Thunk final int[] mTempLocation = new int[2];
+    final PointF mTmpPointF = new PointF();
 
     // Used to visualize / debug the Grid of the CellLayout
     private static final boolean VISUALIZE_GRID = false;
@@ -135,7 +136,7 @@ public class CellLayout extends ViewGroup {
     private final Paint mDragOutlinePaint = new Paint();
 
     @Thunk final ArrayMap<LayoutParams, Animator> mReorderAnimators = new ArrayMap<>();
-    @Thunk final ArrayMap<View, ReorderPreviewAnimation> mShakeAnimators = new ArrayMap<>();
+    @Thunk final ArrayMap<Reorderable, ReorderPreviewAnimation> mShakeAnimators = new ArrayMap<>();
 
     private boolean mItemPlacementDirty = false;
 
@@ -851,9 +852,10 @@ public class CellLayout extends ViewGroup {
             int delay, boolean permanent, boolean adjustOccupied) {
         ShortcutAndWidgetContainer clc = getShortcutsAndWidgets();
 
-        if (clc.indexOfChild(child) != -1) {
+        if (clc.indexOfChild(child) != -1 && (child instanceof Reorderable)) {
             final LayoutParams lp = (LayoutParams) child.getLayoutParams();
             final ItemInfo info = (ItemInfo) child.getTag();
+            final Reorderable item = (Reorderable) child;
 
             // We cancel any existing animations
             if (mReorderAnimators.containsKey(lp)) {
@@ -861,13 +863,18 @@ public class CellLayout extends ViewGroup {
                 mReorderAnimators.remove(lp);
             }
 
-            final int oldX = lp.x;
-            final int oldY = lp.y;
+
             if (adjustOccupied) {
                 GridOccupancy occupied = permanent ? mOccupied : mTmpOccupied;
                 occupied.markCells(lp.cellX, lp.cellY, lp.cellHSpan, lp.cellVSpan, false);
                 occupied.markCells(cellX, cellY, lp.cellHSpan, lp.cellVSpan, true);
             }
+
+            // Compute the new x and y position based on the new cellX and cellY
+            // We leverage the actual layout logic in the layout params and hence need to modify
+            // state and revert that state.
+            final int oldX = lp.x;
+            final int oldY = lp.y;
             lp.isLockedToGrid = true;
             if (permanent) {
                 lp.cellX = info.cellX = cellX;
@@ -877,15 +884,23 @@ public class CellLayout extends ViewGroup {
                 lp.tmpCellY = cellY;
             }
             clc.setupLp(child);
-            lp.isLockedToGrid = false;
             final int newX = lp.x;
             final int newY = lp.y;
-
             lp.x = oldX;
             lp.y = oldY;
+            lp.isLockedToGrid = false;
+            // End compute new x and y
+
+            item.getReorderPreviewOffset(mTmpPointF);
+            final float initPreviewOffsetX = mTmpPointF.x;
+            final float initPreviewOffsetY = mTmpPointF.y;
+            final float finalPreviewOffsetX = newX - oldX;
+            final float finalPreviewOffsetY = newY - oldY;
+
 
             // Exit early if we're not actually moving the view
-            if (oldX == newX && oldY == newY) {
+            if (finalPreviewOffsetX == 0 && finalPreviewOffsetY == 0
+                    && initPreviewOffsetX == 0 && initPreviewOffsetY == 0) {
                 lp.isLockedToGrid = true;
                 return true;
             }
@@ -898,9 +913,9 @@ public class CellLayout extends ViewGroup {
                 @Override
                 public void onAnimationUpdate(ValueAnimator animation) {
                     float r = (Float) animation.getAnimatedValue();
-                    lp.x = (int) ((1 - r) * oldX + r * newX);
-                    lp.y = (int) ((1 - r) * oldY + r * newY);
-                    child.requestLayout();
+                    float x = (1 - r) * initPreviewOffsetX + r * finalPreviewOffsetX;
+                    float y = (1 - r) * initPreviewOffsetY + r * finalPreviewOffsetY;
+                    item.setReorderPreviewOffset(x, y);
                 }
             });
             va.addListener(new AnimatorListenerAdapter() {
@@ -911,6 +926,7 @@ public class CellLayout extends ViewGroup {
                     // place just yet.
                     if (!cancelled) {
                         lp.isLockedToGrid = true;
+                        item.setReorderPreviewOffset(0, 0);
                         child.requestLayout();
                     }
                     if (mReorderAnimators.containsKey(lp)) {
@@ -959,8 +975,13 @@ public class CellLayout extends ViewGroup {
                 height = r.height();
             }
 
-            if (v != null && v.getViewType() == DraggableView.DRAGGABLE_ICON) {
-                left +=  ((mCellWidth * spanX) - dragOutline.getWidth()) / 2;
+            // Center horizontaly
+            left += ((mCellWidth * spanX) - dragOutline.getWidth()) / 2;
+
+            if (v != null && v.getViewType() == DraggableView.DRAGGABLE_WIDGET) {
+                // Center vertically
+                top += ((mCellHeight * spanY) - dragOutline.getHeight()) / 2;
+            } else if (v != null && v.getViewType() == DraggableView.DRAGGABLE_ICON) {
                 int cHeight = getShortcutsAndWidgets().getCellContentHeight();
                 int cellPaddingY = (int) Math.max(0, ((mCellHeight - cHeight) / 2f));
                 top += cellPaddingY;
@@ -1862,10 +1883,11 @@ public class CellLayout extends ViewGroup {
             boolean skip = mode == ReorderPreviewAnimation.MODE_HINT && solution.intersectingViews
                     != null && !solution.intersectingViews.contains(child);
 
+
             LayoutParams lp = (LayoutParams) child.getLayoutParams();
-            if (c != null && !skip) {
-                ReorderPreviewAnimation rha = new ReorderPreviewAnimation(child, mode, lp.cellX,
-                        lp.cellY, c.cellX, c.cellY, c.spanX, c.spanY);
+            if (c != null && !skip && (child instanceof Reorderable)) {
+                ReorderPreviewAnimation rha = new ReorderPreviewAnimation((Reorderable) child,
+                        mode, lp.cellX, lp.cellY, c.cellX, c.cellY, c.spanX, c.spanY);
                 rha.animate();
             }
         }
@@ -1887,7 +1909,7 @@ public class CellLayout extends ViewGroup {
     // Class which represents the reorder preview animations. These animations show that an item is
     // in a temporary state, and hint at where the item will return to.
     class ReorderPreviewAnimation {
-        final View child;
+        final Reorderable child;
         float finalDeltaX;
         float finalDeltaY;
         float initDeltaX;
@@ -1907,8 +1929,8 @@ public class CellLayout extends ViewGroup {
         float animationProgress = 0;
         ValueAnimator a;
 
-        public ReorderPreviewAnimation(View child, int mode, int cellX0, int cellY0, int cellX1,
-                int cellY1, int spanX, int spanY) {
+        public ReorderPreviewAnimation(Reorderable child, int mode, int cellX0, int cellY0,
+                int cellX1, int cellY1, int spanX, int spanY) {
             regionToCenterPoint(cellX0, cellY0, spanX, spanY, mTmpPoint);
             final int x0 = mTmpPoint[0];
             final int y0 = mTmpPoint[1];
@@ -1920,63 +1942,60 @@ public class CellLayout extends ViewGroup {
 
             this.child = child;
             this.mode = mode;
+            finalDeltaX = 0;
+            finalDeltaY = 0;
 
-            // TODO issue!
-            setInitialAnimationValues(false);
-            finalScale = (mChildScale - (CHILD_DIVIDEND / child.getWidth())) * initScale;
-            finalDeltaX = initDeltaX;
-            finalDeltaY = initDeltaY;
+            child.getReorderBounceOffset(mTmpPointF);
+            initDeltaX = mTmpPointF.x;
+            initDeltaY = mTmpPointF.y;
+            initScale = child.getReorderBounceScale();
+            finalScale = mChildScale - (CHILD_DIVIDEND / child.getView().getWidth()) * initScale;
+
             int dir = mode == MODE_HINT ? -1 : 1;
             if (dX == dY && dX == 0) {
             } else {
                 if (dY == 0) {
-                    finalDeltaX += - dir * Math.signum(dX) * mReorderPreviewAnimationMagnitude;
+                    finalDeltaX = -dir * Math.signum(dX) * mReorderPreviewAnimationMagnitude;
                 } else if (dX == 0) {
-                    finalDeltaY += - dir * Math.signum(dY) * mReorderPreviewAnimationMagnitude;
+                    finalDeltaY = -dir * Math.signum(dY) * mReorderPreviewAnimationMagnitude;
                 } else {
                     double angle = Math.atan( (float) (dY) / dX);
-                    finalDeltaX += (int) (- dir * Math.signum(dX) *
-                            Math.abs(Math.cos(angle) * mReorderPreviewAnimationMagnitude));
-                    finalDeltaY += (int) (- dir * Math.signum(dY) *
-                            Math.abs(Math.sin(angle) * mReorderPreviewAnimationMagnitude));
+                    finalDeltaX = (int) (-dir * Math.signum(dX)
+                            * Math.abs(Math.cos(angle) * mReorderPreviewAnimationMagnitude));
+                    finalDeltaY = (int) (-dir * Math.signum(dY)
+                            * Math.abs(Math.sin(angle) * mReorderPreviewAnimationMagnitude));
                 }
             }
         }
 
-        void setInitialAnimationValues(boolean restoreOriginalValues) {
-            if (restoreOriginalValues) {
-                if (child instanceof LauncherAppWidgetHostView) {
-                    LauncherAppWidgetHostView lahv = (LauncherAppWidgetHostView) child;
-                    initScale = lahv.getScaleToFit();
-                    initDeltaX = lahv.getTranslationForCentering().x;
-                    initDeltaY = lahv.getTranslationForCentering().y;
-                } else {
-                    initScale = mChildScale;
-                    initDeltaX = 0;
-                    initDeltaY = 0;
-                }
-            } else {
-                initScale = child.getScaleX();
-                initDeltaX = child.getTranslationX();
-                initDeltaY = child.getTranslationY();
-            }
+        void setInitialAnimationValuesToBaseline() {
+            initScale = mChildScale;
+            initDeltaX = 0;
+            initDeltaY = 0;
         }
 
         void animate() {
-            boolean noMovement = (finalDeltaX == initDeltaX) && (finalDeltaY == initDeltaY);
+            boolean noMovement = (finalDeltaX == 0) && (finalDeltaY == 0);
 
             if (mShakeAnimators.containsKey(child)) {
                 ReorderPreviewAnimation oldAnimation = mShakeAnimators.get(child);
-                oldAnimation.cancel();
                 mShakeAnimators.remove(child);
+
                 if (noMovement) {
-                    completeAnimationImmediately();
+                    // A previous animation for this item exists, and no new animation will exist.
+                    // Finish the old animation smoothly.
+                    oldAnimation.finishAnimation();
                     return;
+                } else {
+                    // A previous animation for this item exists, and a new one will exist. Stop
+                    // the old animation in its tracks, and proceed with the new one.
+                    oldAnimation.cancel();
                 }
             }
             if (noMovement) {
                 return;
             }
+
             ValueAnimator va = ObjectAnimator.ofFloat(this, ANIMATION_PROGRESS, 0, 1);
             a = va;
 
@@ -1993,7 +2012,7 @@ public class CellLayout extends ViewGroup {
             va.addListener(new AnimatorListenerAdapter() {
                 public void onAnimationRepeat(Animator animation) {
                     // We make sure to end only after a full period
-                    setInitialAnimationValues(true);
+                    setInitialAnimationValuesToBaseline();
                     repeating = true;
                 }
             });
@@ -2006,11 +2025,9 @@ public class CellLayout extends ViewGroup {
             float r1 = (mode == MODE_HINT && repeating) ? 1.0f : animationProgress;
             float x = r1 * finalDeltaX + (1 - r1) * initDeltaX;
             float y = r1 * finalDeltaY + (1 - r1) * initDeltaY;
-            child.setTranslationX(x);
-            child.setTranslationY(y);
+            child.setReorderBounceOffset(x, y);
             float s = animationProgress * finalScale + (1 - animationProgress) * initScale;
-            child.setScaleX(s);
-            child.setScaleY(s);
+            child.setReorderBounceScale(s);
         }
 
         private void cancel() {
@@ -2019,27 +2036,27 @@ public class CellLayout extends ViewGroup {
             }
         }
 
-        @Thunk void completeAnimationImmediately() {
+        /**
+         * Smoothly returns the item to its baseline position / scale
+         */
+        @Thunk void finishAnimation() {
             if (a != null) {
                 a.cancel();
             }
 
-            setInitialAnimationValues(true);
-            a = new PropertyListBuilder()
-                    .scale(initScale)
-                    .translationX(initDeltaX)
-                    .translationY(initDeltaY)
-                    .build(child)
-                    .setDuration(REORDER_ANIMATION_DURATION);
-            Launcher.cast(mActivity).getDragController().addFirstFrameAnimationHelper(a);
+            setInitialAnimationValuesToBaseline();
+            ValueAnimator va = ObjectAnimator.ofFloat(this, ANIMATION_PROGRESS,
+                    animationProgress, 0);
+            a = va;
             a.setInterpolator(DEACCEL_1_5);
+            a.setDuration(REORDER_ANIMATION_DURATION);
             a.start();
         }
     }
 
     private void completeAndClearReorderPreviewAnimations() {
         for (ReorderPreviewAnimation a: mShakeAnimators.values()) {
-            a.completeAnimationImmediately();
+            a.finishAnimation();
         }
         mShakeAnimators.clear();
     }

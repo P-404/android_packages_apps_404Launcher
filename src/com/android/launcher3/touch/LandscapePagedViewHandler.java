@@ -16,6 +16,7 @@
 
 package com.android.launcher3.touch;
 
+import static android.widget.ListPopupWindow.WRAP_CONTENT;
 import static com.android.launcher3.LauncherAnimUtils.VIEW_TRANSLATE_X;
 import static com.android.launcher3.LauncherAnimUtils.VIEW_TRANSLATE_Y;
 import static com.android.launcher3.touch.SingleAxisSwipeDetector.HORIZONTAL;
@@ -30,9 +31,9 @@ import android.view.Surface;
 import android.view.VelocityTracker;
 import android.view.View;
 import android.view.accessibility.AccessibilityEvent;
+import android.widget.LinearLayout;
 
 import com.android.launcher3.DeviceProfile;
-import com.android.launcher3.LauncherState.ScaleAndTranslation;
 import com.android.launcher3.PagedView;
 import com.android.launcher3.Utilities;
 import com.android.launcher3.util.OverScroller;
@@ -65,16 +66,21 @@ public class LandscapePagedViewHandler implements PagedOrientationHandler {
     }
 
     @Override
-    public void getCurveProperties(PagedView view, Rect mInsets, CurveProperties out) {
+    public void getCurveProperties(PagedView view, Rect insets, CurveProperties out) {
         out.scroll = view.getScrollY();
         out.halfPageSize = view.getNormalChildHeight() / 2;
         out.halfScreenSize = view.getMeasuredHeight() / 2;
-        out.screenCenter = mInsets.top + view.getPaddingTop() + out.scroll + out.halfPageSize;
+        out.screenCenter = insets.top + view.getPaddingTop() + out.scroll + out.halfPageSize;
     }
 
     @Override
     public boolean isGoingUp(float displacement) {
         return displacement > 0;
+    }
+
+    @Override
+    public boolean isLayoutNaturalToLauncher() {
+        return false;
     }
 
     @Override
@@ -115,11 +121,6 @@ public class LandscapePagedViewHandler implements PagedOrientationHandler {
     }
 
     @Override
-    public int getPrimarySize(Rect rect) {
-        return rect.height();
-    }
-
-    @Override
     public float getPrimarySize(RectF rect) {
         return rect.height();
     }
@@ -127,17 +128,6 @@ public class LandscapePagedViewHandler implements PagedOrientationHandler {
     @Override
     public int getSecondaryDimension(View view) {
         return view.getWidth();
-    }
-
-    @Override
-    public ScaleAndTranslation getScaleAndTranslation(DeviceProfile dp, View view) {
-        float offscreenTranslationY = dp.heightPx - view.getPaddingTop();
-        return new ScaleAndTranslation(1f, 0f, offscreenTranslationY);
-    }
-
-    @Override
-    public float getTranslationValue(ScaleAndTranslation scaleAndTranslation) {
-        return scaleAndTranslation.translationY;
     }
 
     @Override
@@ -154,11 +144,6 @@ public class LandscapePagedViewHandler implements PagedOrientationHandler {
     public void setPrimaryAndResetSecondaryTranslate(View view, float translation) {
         view.setTranslationX(0);
         view.setTranslationY(translation);
-    }
-
-    @Override
-    public float getViewCenterPosition(View view) {
-        return view.getTop() + view.getTranslationY();
     }
 
     @Override
@@ -187,7 +172,7 @@ public class LandscapePagedViewHandler implements PagedOrientationHandler {
     }
 
     @Override
-    public void offsetTaskRect(RectF rect, float value, int displayRotation) {
+    public void offsetTaskRect(RectF rect, float value, int displayRotation, int launcherRotation) {
         if (displayRotation == Surface.ROTATION_0) {
             rect.offset(0, value);
         } else if (displayRotation == Surface.ROTATION_90) {
@@ -202,6 +187,11 @@ public class LandscapePagedViewHandler implements PagedOrientationHandler {
     @Override
     public int getChildStart(View view) {
         return view.getTop();
+    }
+
+    @Override
+    public float getChildStartWithTranslation(View view) {
+        return view.getTop() + view.getTranslationY();
     }
 
     @Override
@@ -233,6 +223,33 @@ public class LandscapePagedViewHandler implements PagedOrientationHandler {
     @Override
     public int getTaskDismissDirectionFactor() {
         return 1;
+    }
+
+    @Override
+    public float getTaskMenuX(float x, View thumbnailView) {
+        return thumbnailView.getMeasuredWidth() + x;
+    }
+
+    @Override
+    public float getTaskMenuY(float y, View thumbnailView) {
+        return y;
+    }
+
+    @Override
+    public int getTaskMenuWidth(View view) {
+        return view.getMeasuredHeight();
+    }
+
+    @Override
+    public int getTaskMenuLayoutOrientation() {
+        return LinearLayout.HORIZONTAL;
+    }
+
+    @Override
+    public void setLayoutParamsForTaskMenuOptionItem(LinearLayout.LayoutParams lp) {
+        lp.width = 0;
+        lp.height = WRAP_CONTENT;
+        lp.weight = 1;
     }
 
     @Override

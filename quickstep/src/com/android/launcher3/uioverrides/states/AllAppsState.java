@@ -16,6 +16,8 @@
 package com.android.launcher3.uioverrides.states;
 
 import static com.android.launcher3.anim.Interpolators.DEACCEL_2;
+import static com.android.launcher3.config.FeatureFlags.ENABLE_OVERVIEW_ACTIONS;
+import static com.android.quickstep.SysUINavigationMode.Mode.NO_BUTTON;
 
 import android.content.Context;
 
@@ -76,7 +78,7 @@ public class AllAppsState extends LauncherState {
     public ScaleAndTranslation getWorkspaceScaleAndTranslation(Launcher launcher) {
         ScaleAndTranslation scaleAndTranslation = LauncherState.OVERVIEW
                 .getWorkspaceScaleAndTranslation(launcher);
-        if (SysUINavigationMode.getMode(launcher) == SysUINavigationMode.Mode.NO_BUTTON) {
+        if (SysUINavigationMode.getMode(launcher) == NO_BUTTON && !ENABLE_OVERVIEW_ACTIONS.get()) {
             float normalScale = 1;
             // Scale down halfway to where we'd be in overview, to prepare for a potential pause.
             scaleAndTranslation.scale = (scaleAndTranslation.scale + normalScale) / 2;
@@ -87,7 +89,7 @@ public class AllAppsState extends LauncherState {
     }
 
     @Override
-    public float getDepth(Context context) {
+    protected float getDepthUnchecked(Context context) {
         return 1f;
     }
 
@@ -102,9 +104,8 @@ public class AllAppsState extends LauncherState {
     }
 
     @Override
-    public ScaleAndTranslation getOverviewScaleAndTranslation(Launcher launcher) {
-        float slightParallax = -launcher.getDeviceProfile().allAppsCellHeightPx * 0.3f;
-        return new ScaleAndTranslation(0.9f, 0f, slightParallax);
+    public float[] getOverviewScaleAndOffset(Launcher launcher) {
+        return new float[] {0.9f, 0};
     }
 
     @Override

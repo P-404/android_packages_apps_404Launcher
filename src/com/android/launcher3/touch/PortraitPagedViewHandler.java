@@ -30,9 +30,9 @@ import android.view.Surface;
 import android.view.VelocityTracker;
 import android.view.View;
 import android.view.accessibility.AccessibilityEvent;
+import android.widget.LinearLayout;
 
 import com.android.launcher3.DeviceProfile;
-import com.android.launcher3.LauncherState.ScaleAndTranslation;
 import com.android.launcher3.PagedView;
 import com.android.launcher3.Utilities;
 import com.android.launcher3.util.OverScroller;
@@ -65,16 +65,21 @@ public class PortraitPagedViewHandler implements PagedOrientationHandler {
     }
 
     @Override
-    public void getCurveProperties(PagedView view, Rect mInsets, CurveProperties out) {
+    public void getCurveProperties(PagedView view, Rect insets, CurveProperties out) {
         out.scroll = view.getScrollX();
         out.halfPageSize = view.getNormalChildWidth() / 2;
         out.halfScreenSize = view.getMeasuredWidth() / 2;
-        out.screenCenter = mInsets.left + view.getPaddingLeft() + out.scroll + out.halfPageSize;
+        out.screenCenter = insets.left + view.getPaddingLeft() + out.scroll + out.halfPageSize;
     }
 
     @Override
     public boolean isGoingUp(float displacement) {
         return displacement < 0;
+    }
+
+    @Override
+    public boolean isLayoutNaturalToLauncher() {
+        return true;
     }
 
     @Override
@@ -113,11 +118,6 @@ public class PortraitPagedViewHandler implements PagedOrientationHandler {
     }
 
     @Override
-    public int getPrimarySize(Rect rect) {
-        return rect.width();
-    }
-
-    @Override
     public float getPrimarySize(RectF rect) {
         return rect.width();
     }
@@ -125,17 +125,6 @@ public class PortraitPagedViewHandler implements PagedOrientationHandler {
     @Override
     public int getSecondaryDimension(View view) {
         return view.getHeight();
-    }
-
-    @Override
-    public ScaleAndTranslation getScaleAndTranslation(DeviceProfile dp, View view) {
-        float offscreenTranslationX = dp.widthPx - view.getPaddingStart();
-        return new ScaleAndTranslation(1f, offscreenTranslationX, 0f);
-    }
-
-    @Override
-    public float getTranslationValue(ScaleAndTranslation scaleAndTranslation) {
-        return scaleAndTranslation.translationX;
     }
 
     @Override
@@ -152,11 +141,6 @@ public class PortraitPagedViewHandler implements PagedOrientationHandler {
     public void setPrimaryAndResetSecondaryTranslate(View view, float translation) {
         view.setTranslationX(translation);
         view.setTranslationY(0);
-    }
-
-    @Override
-    public float getViewCenterPosition(View view) {
-        return view.getLeft() + view.getTranslationX();
     }
 
     @Override
@@ -185,7 +169,7 @@ public class PortraitPagedViewHandler implements PagedOrientationHandler {
     }
 
     @Override
-    public void offsetTaskRect(RectF rect, float value, int displayRotation) {
+    public void offsetTaskRect(RectF rect, float value, int displayRotation, int launcherRotation) {
         if (displayRotation == Surface.ROTATION_0) {
             rect.offset(value, 0);
         } else if (displayRotation == Surface.ROTATION_90) {
@@ -200,6 +184,11 @@ public class PortraitPagedViewHandler implements PagedOrientationHandler {
     @Override
     public int getChildStart(View view) {
         return view.getLeft();
+    }
+
+    @Override
+    public float getChildStartWithTranslation(View view) {
+        return view.getLeft() + view.getTranslationX();
     }
 
     @Override
@@ -231,6 +220,31 @@ public class PortraitPagedViewHandler implements PagedOrientationHandler {
     @Override
     public int getTaskDismissDirectionFactor() {
         return -1;
+    }
+
+    @Override
+    public float getTaskMenuX(float x, View thumbnailView) {
+        return x;
+    }
+
+    @Override
+    public float getTaskMenuY(float y, View thumbnailView) {
+        return y;
+    }
+
+    @Override
+    public int getTaskMenuWidth(View view) {
+        return view.getMeasuredWidth();
+    }
+
+    @Override
+    public int getTaskMenuLayoutOrientation() {
+        return LinearLayout.VERTICAL;
+    }
+
+    @Override
+    public void setLayoutParamsForTaskMenuOptionItem(LinearLayout.LayoutParams lp) {
+        // no-op, defaults are fine
     }
 
     @Override

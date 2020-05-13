@@ -15,164 +15,151 @@
  */
 package com.android.quickstep.interaction;
 
+import static com.android.quickstep.interaction.TutorialController.TutorialType.BACK_NAVIGATION_COMPLETE;
+import static com.android.quickstep.interaction.TutorialController.TutorialType.LEFT_EDGE_BACK_NAVIGATION;
+
 import android.view.View;
-import android.widget.Button;
-import android.widget.ImageButton;
-import android.widget.ImageView;
-import android.widget.LinearLayout;
-import android.widget.TextView;
 
 import com.android.launcher3.R;
-import com.android.quickstep.interaction.BackGestureTutorialFragment.TutorialStep;
-import com.android.quickstep.interaction.BackGestureTutorialFragment.TutorialType;
 import com.android.quickstep.interaction.EdgeBackGestureHandler.BackGestureResult;
+import com.android.quickstep.interaction.NavBarGestureHandler.NavBarGestureResult;
 
-import java.util.Optional;
+/** A {@link TutorialController} for the Back tutorial. */
+final class BackGestureTutorialController extends TutorialController {
 
-/**
- * Defines the behavior of the particular {@link TutorialStep} and implements the transition to it.
- */
-abstract class BackGestureTutorialController {
-
-    final BackGestureTutorialFragment mFragment;
-    final TutorialStep mTutorialStep;
-    final Optional<BackGestureTutorialTypeInfo> mTutorialTypeInfo;
-    final Button mActionTextButton;
-    final Button mActionButton;
-    final TextView mSubtitleTextView;
-    final ImageButton mCloseButton;
-    final BackGestureTutorialHandAnimation mHandCoachingAnimation;
-    final LinearLayout mTitlesContainer;
-
-    private final TextView mTitleTextView;
-    private final ImageView mHandCoachingView;
-
-    BackGestureTutorialController(
-            BackGestureTutorialFragment fragment,
-            TutorialStep tutorialStep,
-            Optional<BackGestureTutorialTypeInfo> tutorialTypeInfo) {
-        mFragment = fragment;
-        mTutorialStep = tutorialStep;
-        mTutorialTypeInfo = tutorialTypeInfo;
-
-        View rootView = fragment.getRootView();
-        mActionTextButton = rootView.findViewById(
-                R.id.back_gesture_tutorial_fragment_action_text_button);
-        mActionButton = rootView.findViewById(R.id.back_gesture_tutorial_fragment_action_button);
-        mSubtitleTextView = rootView.findViewById(
-                R.id.back_gesture_tutorial_fragment_subtitle_view);
-        mTitleTextView = rootView.findViewById(R.id.back_gesture_tutorial_fragment_title_view);
-        mHandCoachingView = rootView.findViewById(
-                R.id.back_gesture_tutorial_fragment_hand_coaching);
-        mHandCoachingAnimation = mFragment.getHandAnimation();
-        mHandCoachingView.bringToFront();
-        mCloseButton = rootView.findViewById(R.id.back_gesture_tutorial_fragment_close_button);
-        mTitlesContainer = rootView.findViewById(
-                R.id.back_gesture_tutorial_fragment_titles_container);
+    BackGestureTutorialController(BackGestureTutorialFragment fragment, TutorialType tutorialType) {
+        super(fragment, tutorialType);
     }
 
+    @Override
     void transitToController() {
-        updateTitles();
-        updateActionButtons();
+        super.transitToController();
+        if (mTutorialType != BACK_NAVIGATION_COMPLETE) {
+            showHandCoachingAnimation();
+        }
     }
 
-    void hideHandCoachingAnimation() {
-        mHandCoachingAnimation.stop();
-    }
-
-    void onGestureAttempted(BackGestureResult result) {
-        if (mTutorialStep == TutorialStep.CONFIRM
-                && (result == BackGestureResult.BACK_COMPLETED_FROM_LEFT
-                    || result == BackGestureResult.BACK_COMPLETED_FROM_RIGHT)) {
-            mFragment.closeTutorial();
-            return;
-        }
-
-        if (!mTutorialTypeInfo.isPresent()) {
-            return;
-        }
-
-        switch (mTutorialTypeInfo.get().getTutorialType()) {
+    @Override
+    Integer getTitleStringId() {
+        switch (mTutorialType) {
             case RIGHT_EDGE_BACK_NAVIGATION:
-                if (result == BackGestureResult.BACK_COMPLETED_FROM_RIGHT) {
-                    hideHandCoachingAnimation();
-                    mFragment.changeController(
-                            TutorialStep.ENGAGED, TutorialType.LEFT_EDGE_BACK_NAVIGATION);
-                }
+                return R.string.back_gesture_tutorial_playground_title_swipe_inward_right_edge;
+            case LEFT_EDGE_BACK_NAVIGATION:
+                return R.string.back_gesture_tutorial_playground_title_swipe_inward_left_edge;
+            case BACK_NAVIGATION_COMPLETE:
+                return R.string.gesture_tutorial_confirm_title;
+        }
+        return null;
+    }
+
+    @Override
+    Integer getSubtitleStringId() {
+        switch (mTutorialType) {
+            case RIGHT_EDGE_BACK_NAVIGATION:
+                return R.string.back_gesture_tutorial_engaged_subtitle_swipe_inward_right_edge;
+            case LEFT_EDGE_BACK_NAVIGATION:
+                return R.string.back_gesture_tutorial_engaged_subtitle_swipe_inward_left_edge;
+            case BACK_NAVIGATION_COMPLETE:
+                return R.string.back_gesture_tutorial_confirm_subtitle;
+        }
+        return null;
+    }
+
+    @Override
+    Integer getActionButtonStringId() {
+        if (mTutorialType == BACK_NAVIGATION_COMPLETE) {
+            return R.string.gesture_tutorial_action_button_label;
+        }
+        return null;
+    }
+
+    @Override
+    Integer getActionTextButtonStringId() {
+        if (mTutorialType == BACK_NAVIGATION_COMPLETE) {
+            return R.string.gesture_tutorial_action_text_button_label;
+        }
+        return null;
+    }
+
+    @Override
+    void onActionButtonClicked(View button) {
+        mTutorialFragment.closeTutorial();
+    }
+
+    @Override
+    void onActionTextButtonClicked(View button) {
+        mTutorialFragment.startSystemNavigationSetting();
+        mTutorialFragment.closeTutorial();
+    }
+
+    @Override
+    public void onBackGestureAttempted(BackGestureResult result) {
+        switch (mTutorialType) {
+            case RIGHT_EDGE_BACK_NAVIGATION:
+                handleAttemptFromRight(result);
                 break;
             case LEFT_EDGE_BACK_NAVIGATION:
-                if (result == BackGestureResult.BACK_COMPLETED_FROM_LEFT) {
-                    hideHandCoachingAnimation();
-                    mFragment.changeController(TutorialStep.CONFIRM);
+                handleAttemptFromLeft(result);
+                break;
+            case BACK_NAVIGATION_COMPLETE:
+                if (result == BackGestureResult.BACK_COMPLETED_FROM_LEFT
+                        || result == BackGestureResult.BACK_COMPLETED_FROM_RIGHT) {
+                    mTutorialFragment.closeTutorial();
                 }
                 break;
         }
     }
 
-    abstract Optional<Integer> getTitleStringId();
-
-    abstract Optional<Integer> getSubtitleStringId();
-
-    abstract Optional<Integer> getActionButtonStringId();
-
-    abstract Optional<Integer> getActionTextButtonStringId();
-
-    abstract void onActionButtonClicked(View button);
-
-    private void updateActionButtons() {
-        updateButton(mActionButton, getActionButtonStringId(), this::onActionButtonClicked);
-        updateButton(mActionTextButton, getActionTextButtonStringId(), this::onActionButtonClicked);
-    }
-
-    private static void updateButton(Button button, Optional<Integer> stringId,
-            View.OnClickListener listener) {
-        if (!stringId.isPresent()) {
-            button.setVisibility(View.INVISIBLE);
-            return;
+    private void handleAttemptFromRight(BackGestureResult result) {
+        switch (result) {
+            case BACK_COMPLETED_FROM_RIGHT:
+                hideFeedback();
+                hideHandCoachingAnimation();
+                showRippleEffect(
+                        () -> mTutorialFragment.changeController(LEFT_EDGE_BACK_NAVIGATION));
+                break;
+            case BACK_CANCELLED_FROM_RIGHT:
+                showFeedback(R.string.back_gesture_feedback_cancelled_right_edge);
+                break;
+            case BACK_COMPLETED_FROM_LEFT:
+            case BACK_CANCELLED_FROM_LEFT:
+            case BACK_NOT_STARTED_TOO_FAR_FROM_EDGE:
+                showFeedback(R.string.back_gesture_feedback_swipe_too_far_from_right_edge);
+                break;
+            case BACK_NOT_STARTED_IN_NAV_BAR_REGION:
+                showFeedback(R.string.back_gesture_feedback_swipe_in_nav_bar);
+                break;
         }
-
-        button.setVisibility(View.VISIBLE);
-        button.setText(stringId.get());
-        button.setOnClickListener(listener);
     }
 
-    private void updateTitles() {
-        updateTitleView(mTitleTextView, getTitleStringId(),
-                R.style.TextAppearance_BackGestureTutorial_Title);
-        updateTitleView(mSubtitleTextView, getSubtitleStringId(),
-                R.style.TextAppearance_BackGestureTutorial_Subtitle);
-    }
-
-    private static void updateTitleView(TextView textView, Optional<Integer> stringId,
-            int styleId) {
-        if (!stringId.isPresent()) {
-            textView.setVisibility(View.GONE);
-            return;
+    private void handleAttemptFromLeft(BackGestureResult result) {
+        switch (result) {
+            case BACK_COMPLETED_FROM_LEFT:
+                hideFeedback();
+                hideHandCoachingAnimation();
+                showRippleEffect(
+                        () -> mTutorialFragment.changeController(BACK_NAVIGATION_COMPLETE));
+                break;
+            case BACK_CANCELLED_FROM_LEFT:
+                showFeedback(R.string.back_gesture_feedback_cancelled_left_edge);
+                break;
+            case BACK_COMPLETED_FROM_RIGHT:
+            case BACK_CANCELLED_FROM_RIGHT:
+            case BACK_NOT_STARTED_TOO_FAR_FROM_EDGE:
+                showFeedback(R.string.back_gesture_feedback_swipe_too_far_from_left_edge);
+                break;
+            case BACK_NOT_STARTED_IN_NAV_BAR_REGION:
+                showFeedback(R.string.back_gesture_feedback_swipe_in_nav_bar);
+                break;
         }
-
-        textView.setVisibility(View.VISIBLE);
-        textView.setText(stringId.get());
-        textView.setTextAppearance(styleId);
     }
 
-    /**
-     * Constructs {@link BackGestureTutorialController} for providing {@link TutorialType} and
-     * {@link TutorialStep}.
-     */
-    static Optional<BackGestureTutorialController> getTutorialController(
-            BackGestureTutorialFragment fragment, TutorialStep tutorialStep,
-            TutorialType tutorialType) {
-        BackGestureTutorialTypeInfo tutorialTypeInfo =
-                BackGestureTutorialTypeInfoProvider.getTutorialTypeInfo(tutorialType);
-        switch (tutorialStep) {
-            case ENGAGED:
-                return Optional.of(
-                        new BackGestureTutorialEngagedController(fragment, tutorialTypeInfo));
-            case CONFIRM:
-                return Optional.of(
-                        new BackGestureTutorialConfirmController(fragment, tutorialTypeInfo));
-            default:
-                throw new AssertionError("Unexpected tutorial step: " + tutorialStep);
+    @Override
+    public void onNavBarGestureAttempted(NavBarGestureResult result) {
+        if (mTutorialType == BACK_NAVIGATION_COMPLETE) {
+            if (result == NavBarGestureResult.HOME_GESTURE_COMPLETED) {
+                mTutorialFragment.closeTutorial();
+            }
         }
     }
 }

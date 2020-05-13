@@ -92,8 +92,8 @@ public final class FeatureFlags {
     public static final BooleanFlag ENABLE_QUICKSTEP_LIVE_TILE = getDebugFlag(
             "ENABLE_QUICKSTEP_LIVE_TILE", false, "Enable live tile in Quickstep overview");
 
-    public static final BooleanFlag ENABLE_HINTS_IN_OVERVIEW = getDebugFlag(
-            "ENABLE_HINTS_IN_OVERVIEW", false, "Show chip hints and gleams on the overview screen");
+    public static final BooleanFlag ENABLE_SUGGESTED_ACTIONS_OVERVIEW = new DeviceFlag(
+            "ENABLE_SUGGESTED_ACTIONS_OVERVIEW", false, "Show chip hints on the overview screen");
 
     public static final BooleanFlag FOLDER_NAME_SUGGEST = new DeviceFlag(
             "FOLDER_NAME_SUGGEST", true,
@@ -127,7 +127,7 @@ public final class FeatureFlags {
             "ENABLE_DEEP_SHORTCUT_ICON_CACHE", true, "R/W deep shortcut in IconCache");
 
     public static final BooleanFlag MULTI_DB_GRID_MIRATION_ALGO = getDebugFlag(
-            "MULTI_DB_GRID_MIRATION_ALGO", false, "Use the multi-db grid migration algorithm");
+            "MULTI_DB_GRID_MIRATION_ALGO", true, "Use the multi-db grid migration algorithm");
 
     public static final BooleanFlag ENABLE_LAUNCHER_PREVIEW_IN_GRID_PICKER = getDebugFlag(
             "ENABLE_LAUNCHER_PREVIEW_IN_GRID_PICKER", true, "Show launcher preview in grid picker");
@@ -159,15 +159,12 @@ public final class FeatureFlags {
             "ALWAYS_USE_HARDWARE_OPTIMIZATION_FOR_FOLDER_ANIMATIONS", false,
             "Always use hardware optimization for folder animations.");
 
-    public static final BooleanFlag ENABLE_FIXED_ROTATION_TRANSFORM = getDebugFlag(
-            FLAG_ENABLE_FIXED_ROTATION_TRANSFORM, true,
-            "Launch/close apps without rotation animation. Fix Launcher to portrait");
-
     public static void initialize(Context context) {
         synchronized (sDebugFlags) {
             for (DebugFlag flag : sDebugFlags) {
                 flag.initialize(context);
             }
+            sDebugFlags.sort((f1, f2) -> f1.key.compareToIgnoreCase(f2.key));
         }
     }
 
@@ -178,10 +175,20 @@ public final class FeatureFlags {
     }
 
     public static void dump(PrintWriter pw) {
-        pw.println("FeatureFlags:");
+        pw.println("DeviceFlags:");
         synchronized (sDebugFlags) {
             for (DebugFlag flag : sDebugFlags) {
-                pw.println("  " + flag.key + "=" + flag.get());
+                if (flag instanceof DeviceFlag) {
+                    pw.println("  " + flag.toString());
+                }
+            }
+        }
+        pw.println("DebugFlags:");
+        synchronized (sDebugFlags) {
+            for (DebugFlag flag : sDebugFlags) {
+                if (!(flag instanceof DeviceFlag)) {
+                    pw.println("  " + flag.toString());
+                }
             }
         }
     }
@@ -202,13 +209,11 @@ public final class FeatureFlags {
 
         @Override
         public String toString() {
-            return appendProps(new StringBuilder()
-                    .append(getClass().getSimpleName()).append('{'))
-                    .append('}').toString();
+            return appendProps(new StringBuilder()).toString();
         }
 
         protected StringBuilder appendProps(StringBuilder src) {
-            return src.append("key=").append(key).append(", defaultValue=").append(defaultValue);
+            return src.append(key).append(", defaultValue=").append(defaultValue);
         }
 
         public void addChangeListener(Context context, Runnable r) { }
@@ -240,8 +245,7 @@ public final class FeatureFlags {
 
         @Override
         protected StringBuilder appendProps(StringBuilder src) {
-            return super.appendProps(src).append(", mCurrentValue=").append(mCurrentValue)
-                    .append(", description=").append(description);
+            return super.appendProps(src).append(", mCurrentValue=").append(mCurrentValue);
         }
     }
 

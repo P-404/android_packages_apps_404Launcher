@@ -20,7 +20,6 @@ import android.content.res.Resources;
 import android.graphics.Point;
 import android.graphics.PointF;
 import android.os.SystemProperties;
-import android.view.Display;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.View.OnTouchListener;
@@ -46,7 +45,6 @@ public class EdgeBackGestureHandler implements OnTouchListener {
     private final Context mContext;
 
     private final Point mDisplaySize = new Point();
-    private final int mDisplayId;
 
     // The edge width where touch down is allowed
     private int mEdgeWidth;
@@ -60,6 +58,7 @@ public class EdgeBackGestureHandler implements OnTouchListener {
     private final PointF mDownPoint = new PointF();
     private boolean mThresholdCrossed = false;
     private boolean mAllowGesture = false;
+    private BackGestureResult mDisallowedGestureReason;
     private boolean mIsEnabled;
     private int mLeftInset;
     private int mRightInset;
@@ -91,8 +90,6 @@ public class EdgeBackGestureHandler implements OnTouchListener {
     EdgeBackGestureHandler(Context context) {
         final Resources res = context.getResources();
         mContext = context;
-        mDisplayId = context.getDisplay() == null
-                ? Display.DEFAULT_DISPLAY : context.getDisplay().getDisplayId();
 
         mTouchSlop = ViewConfiguration.get(context).getScaledTouchSlop();
         mLongPressTimeout = Math.min(MAX_LONG_PRESS_TIMEOUT,
@@ -126,6 +123,10 @@ public class EdgeBackGestureHandler implements OnTouchListener {
         mGestureCallback = callback;
     }
 
+    void unregisterBackGestureAttemptCallback() {
+        mGestureCallback = null;
+    }
+
     private LayoutParams createLayoutParams() {
         Resources resources = mContext.getResources();
         return new LayoutParams(
@@ -145,11 +146,13 @@ public class EdgeBackGestureHandler implements OnTouchListener {
     private boolean isWithinTouchRegion(int x, int y) {
         // Disallow if too far from the edge
         if (x > mEdgeWidth + mLeftInset && x < (mDisplaySize.x - mEdgeWidth - mRightInset)) {
+            mDisallowedGestureReason = BackGestureResult.BACK_NOT_STARTED_TOO_FAR_FROM_EDGE;
             return false;
         }
 
         // Disallow if we are in the bottom gesture area
         if (y >= (mDisplaySize.y - mBottomGestureHeight)) {
+            mDisallowedGestureReason = BackGestureResult.BACK_NOT_STARTED_IN_NAV_BAR_REGION;
             return false;
         }
 
@@ -169,12 +172,12 @@ public class EdgeBackGestureHandler implements OnTouchListener {
         int action = ev.getActionMasked();
         if (action == MotionEvent.ACTION_DOWN) {
             boolean isOnLeftEdge = ev.getX() <= mEdgeWidth + mLeftInset;
+            mDisallowedGestureReason = BackGestureResult.UNKNOWN;
             mAllowGesture = isWithinTouchRegion((int) ev.getX(), (int) ev.getY());
+            mDownPoint.set(ev.getX(), ev.getY());
             if (mAllowGesture) {
                 mEdgeBackPanel.setIsLeftPanel(isOnLeftEdge);
                 mEdgeBackPanel.onMotionEvent(ev);
-
-                mDownPoint.set(ev.getX(), ev.getY());
                 mThresholdCrossed = false;
             }
         } else if (mAllowGesture) {
@@ -193,7 +196,6 @@ public class EdgeBackGestureHandler implements OnTouchListener {
                     if (dy > dx && dy > mTouchSlop) {
                         cancelGesture(ev);
                         return;
-
                     } else if (dx > dy && dx > mTouchSlop) {
                         mThresholdCrossed = true;
                     }
@@ -206,8 +208,10 @@ public class EdgeBackGestureHandler implements OnTouchListener {
         }
 
         if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {
-            if (!mAllowGesture && mGestureCallback != null) {
-                mGestureCallback.onBackGestureAttempted(BackGestureResult.BACK_NOT_STARTED);
+            float dx = Math.abs(ev.getX() - mDownPoint.x);
+            float dy = Math.abs(ev.getY() - mDownPoint.y);
+            if (dx > dy && dx > mTouchSlop && !mAllowGesture && mGestureCallback != null) {
+                mGestureCallback.onBackGestureAttempted(mDisallowedGestureReason);
             }
         }
     }
@@ -223,7 +227,8 @@ public class EdgeBackGestureHandler implements OnTouchListener {
         BACK_COMPLETED_FROM_RIGHT,
         BACK_CANCELLED_FROM_LEFT,
         BACK_CANCELLED_FROM_RIGHT,
-        BACK_NOT_STARTED,
+        BACK_NOT_STARTED_TOO_FAR_FROM_EDGE,
+        BACK_NOT_STARTED_IN_NAV_BAR_REGION,
     }
 
     /** Callback to let the UI react to attempted back gestures. */

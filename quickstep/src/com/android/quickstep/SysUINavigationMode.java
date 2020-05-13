@@ -26,6 +26,7 @@ import android.util.Log;
 
 import com.android.launcher3.util.MainThreadInitializedObject;
 
+import java.io.PrintWriter;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -73,13 +74,18 @@ public class SysUINavigationMode {
         mContext.registerReceiver(new BroadcastReceiver() {
             @Override
             public void onReceive(Context context, Intent intent) {
-                Mode oldMode = mMode;
-                initializeMode();
-                if (mMode != oldMode) {
-                    dispatchModeChange();
-                }
+                updateMode();
             }
         }, getPackageFilter("android", ACTION_OVERLAY_CHANGED));
+    }
+
+    /** Updates navigation mode when needed. */
+    public void updateMode() {
+        Mode oldMode = mMode;
+        initializeMode();
+        if (mMode != oldMode) {
+            dispatchModeChange();
+        }
     }
 
     private void initializeMode() {
@@ -126,6 +132,11 @@ public class SysUINavigationMode {
     public static boolean removeShelfFromOverview(Context context) {
         // The shelf is core to the two-button mode model, so we need to continue supporting it.
         return getMode(context) != Mode.TWO_BUTTONS;
+    }
+
+    public void dump(PrintWriter pw) {
+        pw.println("SysUINavigationMode:");
+        pw.println("  mode=" + mMode.name());
     }
 
     public interface NavigationModeChangeListener {

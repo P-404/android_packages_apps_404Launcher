@@ -45,9 +45,7 @@ import com.android.launcher3.LauncherStateManager.StateListener;
 import com.android.launcher3.anim.Interpolators;
 import com.android.launcher3.appprediction.PredictionUiStateManager;
 import com.android.launcher3.appprediction.PredictionUiStateManager.Client;
-import com.android.launcher3.config.FeatureFlags;
 import com.android.launcher3.statehandlers.DepthController;
-import com.android.launcher3.states.RotationHelper;
 import com.android.launcher3.uioverrides.plugins.PluginManagerWrapper;
 import com.android.launcher3.util.TraceHelper;
 import com.android.launcher3.views.ScrimView;
@@ -88,10 +86,6 @@ public class LauncherRecentsView extends RecentsView<BaseQuickstepLauncher>
         }
     };
 
-    private RotationHelper.ForcedRotationChangedListener mForcedRotationChangedListener =
-            isForcedRotation -> LauncherRecentsView.this
-                    .disableMultipleLayoutRotations(!isForcedRotation);
-
     public LauncherRecentsView(Context context) {
         this(context, null);
     }
@@ -101,9 +95,14 @@ public class LauncherRecentsView extends RecentsView<BaseQuickstepLauncher>
     }
 
     public LauncherRecentsView(Context context, AttributeSet attrs, int defStyleAttr) {
-        super(context, attrs, defStyleAttr);
-        setContentAlpha(0);
+        super(context, attrs, defStyleAttr, true);
         mActivity.getStateManager().addStateListener(this);
+    }
+
+    @Override
+    public void init(OverviewActionsView actionsView) {
+        super.init(actionsView);
+        setContentAlpha(0);
     }
 
     @Override
@@ -181,27 +180,6 @@ public class LauncherRecentsView extends RecentsView<BaseQuickstepLauncher>
     @Override
     protected void getTaskSize(DeviceProfile dp, Rect outRect) {
         LayoutUtils.calculateLauncherTaskSize(getContext(), dp, outRect);
-    }
-
-    /**
-     * @return The translationX to apply to this view so that the first task is just offscreen.
-     */
-    public float getOffscreenTranslationX(float recentsScale) {
-        LauncherState.ScaleAndTranslation overviewScaleAndTranslation =
-            NORMAL.getOverviewScaleAndTranslation(mActivity);
-        float offscreen = mOrientationHandler.getTranslationValue(overviewScaleAndTranslation);
-        // Offset since scale pushes tasks outwards.
-        getTaskSize(sTempRect);
-        int taskSize = mOrientationHandler.getPrimarySize(sTempRect);
-        offscreen += taskSize * (recentsScale - 1) / 2;
-        if (mRunningTaskTileHidden) {
-            // The first task is hidden, so offset by its width.
-            offscreen -= (taskSize + getPageSpacing()) * recentsScale;
-        }
-        if (isRtl()) {
-            offscreen = -offscreen;
-        }
-        return offscreen;
     }
 
     @Override
@@ -286,12 +264,6 @@ public class LauncherRecentsView extends RecentsView<BaseQuickstepLauncher>
     }
 
     @Override
-    protected boolean supportsVerticalLandscape() {
-        return FeatureFlags.ENABLE_FIXED_ROTATION_TRANSFORM.get()
-                && !mOrientationState.areMultipleLayoutOrientationsDisabled();
-    }
-
-    @Override
     public void reset() {
         super.reset();
 
@@ -344,7 +316,6 @@ public class LauncherRecentsView extends RecentsView<BaseQuickstepLauncher>
         super.onAttachedToWindow();
         PluginManagerWrapper.INSTANCE.get(getContext()).addPluginListener(
                 mRecentsExtraCardPluginListener, RecentsExtraCard.class);
-        mActivity.getRotationHelper().addForcedRotationCallback(mForcedRotationChangedListener);
     }
 
     @Override
@@ -352,7 +323,6 @@ public class LauncherRecentsView extends RecentsView<BaseQuickstepLauncher>
         super.onDetachedFromWindow();
         PluginManagerWrapper.INSTANCE.get(getContext()).removePluginListener(
                 mRecentsExtraCardPluginListener);
-        mActivity.getRotationHelper().removeForcedRotationCallback(mForcedRotationChangedListener);
     }
 
     @Override

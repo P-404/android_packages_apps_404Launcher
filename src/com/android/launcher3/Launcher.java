@@ -25,6 +25,8 @@ import static com.android.launcher3.AbstractFloatingView.TYPE_SNACKBAR;
 import static com.android.launcher3.LauncherAnimUtils.SPRING_LOADED_EXIT_DELAY;
 import static com.android.launcher3.LauncherState.ALL_APPS;
 import static com.android.launcher3.LauncherState.NORMAL;
+import static com.android.launcher3.LauncherState.NO_OFFSET;
+import static com.android.launcher3.LauncherState.NO_SCALE;
 import static com.android.launcher3.LauncherState.OVERVIEW;
 import static com.android.launcher3.LauncherState.OVERVIEW_PEEK;
 import static com.android.launcher3.Utilities.postAsyncCallback;
@@ -85,7 +87,6 @@ import androidx.annotation.StringRes;
 import androidx.annotation.VisibleForTesting;
 
 import com.android.launcher3.DropTarget.DragObject;
-import com.android.launcher3.LauncherState.ScaleAndTranslation;
 import com.android.launcher3.LauncherStateManager.StateHandler;
 import com.android.launcher3.accessibility.LauncherAccessibilityDelegate;
 import com.android.launcher3.allapps.AllAppsContainerView;
@@ -110,6 +111,12 @@ import com.android.launcher3.logging.UserEventDispatcher;
 import com.android.launcher3.model.AppLaunchTracker;
 import com.android.launcher3.model.BgDataModel.Callbacks;
 import com.android.launcher3.model.ModelWriter;
+import com.android.launcher3.model.data.AppInfo;
+import com.android.launcher3.model.data.FolderInfo;
+import com.android.launcher3.model.data.ItemInfo;
+import com.android.launcher3.model.data.LauncherAppWidgetInfo;
+import com.android.launcher3.model.data.PromiseAppInfo;
+import com.android.launcher3.model.data.WorkspaceItemInfo;
 import com.android.launcher3.notification.NotificationListener;
 import com.android.launcher3.pm.PinRequestHelper;
 import com.android.launcher3.pm.UserCache;
@@ -133,6 +140,7 @@ import com.android.launcher3.util.IntArray;
 import com.android.launcher3.util.ItemInfoMatcher;
 import com.android.launcher3.util.MultiValueAlpha;
 import com.android.launcher3.util.MultiValueAlpha.AlphaProperty;
+import com.android.launcher3.util.OnboardingPrefs;
 import com.android.launcher3.util.PackageManagerHelper;
 import com.android.launcher3.util.PackageUserKey;
 import com.android.launcher3.util.PendingRequestArgs;
@@ -294,6 +302,7 @@ public class Launcher extends BaseDraggingActivity implements LauncherExterns,
     // We only want to get the SharedPreferences once since it does an FS stat each time we get
     // it from the context.
     private SharedPreferences mSharedPrefs;
+    private OnboardingPrefs mOnboardingPrefs;
 
     // Activity result which needs to be processed after workspace has loaded.
     private ActivityResultInfo mPendingActivityResult;
@@ -361,6 +370,8 @@ public class Launcher extends BaseDraggingActivity implements LauncherExterns,
         mAllAppsController = new AllAppsTransitionController(this);
         mStateManager = new LauncherStateManager(this);
 
+        mOnboardingPrefs = createOnboardingPrefs(mSharedPrefs, mStateManager);
+
         mAppWidgetManager = new WidgetManagerHelper(this);
         mAppWidgetHost = new LauncherAppWidgetHost(this,
                 appWidgetId -> getWorkspace().removeWidget(appWidgetId));
@@ -423,9 +434,6 @@ public class Launcher extends BaseDraggingActivity implements LauncherExterns,
         mRotationHelper.initialize();
 
         mStateManager.addStateListener(new LauncherStateManager.StateListener() {
-            @Override
-            public void onStateTransitionStart(LauncherState toState) {
-            }
 
             @Override
             public void onStateTransitionComplete(LauncherState finalState) {
@@ -450,6 +458,15 @@ public class Launcher extends BaseDraggingActivity implements LauncherExterns,
 
     protected LauncherOverlayManager getDefaultOverlay() {
         return new LauncherOverlayManager() { };
+    }
+
+    protected OnboardingPrefs createOnboardingPrefs(SharedPreferences sharedPrefs,
+            LauncherStateManager stateManager) {
+        return new OnboardingPrefs<>(this, sharedPrefs, stateManager);
+    }
+
+    public OnboardingPrefs getOnboardingPrefs() {
+        return mOnboardingPrefs;
     }
 
     @Override
@@ -1443,6 +1460,8 @@ public class Launcher extends BaseDraggingActivity implements LauncherExterns,
                 mLauncherCallbacks.onHomeIntent(internalStateHandled);
             }
             mOverlayManager.hideOverlay(isStarted() && !isForceInvisible());
+        } else if (Intent.ACTION_ALL_APPS.equals(intent.getAction())) {
+            getStateManager().goToState(ALL_APPS, alreadyOnHome);
         }
 
         TraceHelper.INSTANCE.endSection(traceToken);
@@ -1526,6 +1545,7 @@ public class Launcher extends BaseDraggingActivity implements LauncherExterns,
         mOverlayManager.onActivityDestroyed(this);
         mAppTransitionManager.unregisterRemoteAnimations();
         mUserChangedCallbackCloseable.close();
+        mAllAppsController.onActivityDestroyed();
     }
 
     public LauncherAccessibilityDelegate getAccessibilityDelegate() {
@@ -1653,6 +1673,7 @@ public class Launcher extends BaseDraggingActivity implements LauncherExterns,
     private void processShortcutFromDrop(PendingAddShortcutInfo info) {
         Intent intent = new Intent(Intent.ACTION_CREATE_SHORTCUT).setComponent(info.componentName);
         setWaitingForResult(PendingRequestArgs.forIntent(REQUEST_CREATE_SHORTCUT, intent, info));
+        TestLogging.recordEvent(TestProtocol.SEQUENCE_MAIN, "start: processShortcutFromDrop");
         if (!info.activityInfo.startConfigActivity(this, REQUEST_CREATE_SHORTCUT)) {
             handleActivityResult(REQUEST_CREATE_SHORTCUT, RESULT_CANCELED, null);
         }
@@ -2557,9 +2578,10 @@ public class Launcher extends BaseDraggingActivity implements LauncherExterns,
         writer.println(prefix + "\tmRotationHelper: " + mRotationHelper);
         writer.println(prefix + "\tmAppWidgetHost.isListening: " + mAppWidgetHost.isListening());
 
-        // Extra logging for b/116853349
+        // Extra logging for general debugging
         mDragLayer.dump(prefix, writer);
         mStateManager.dump(prefix, writer);
+        mPopupDataProvider.dump(prefix, writer);
 
         try {
             FileLog.flushAll(writer);
@@ -2674,10 +2696,6 @@ public class Launcher extends BaseDraggingActivity implements LauncherExterns,
         return new TouchController[] {getDragController(), new AllAppsSwipeController(this)};
     }
 
-    protected ScaleAndTranslation getOverviewScaleAndTranslationForNormalState() {
-        return new ScaleAndTranslation(1.1f, 0f, 0f);
-    }
-
     public void useFadeOutAnimationForLauncherStart(CancellationSignal signal) { }
 
     public void onDragLayerHierarchyChanged() { }
@@ -2700,6 +2718,14 @@ public class Launcher extends BaseDraggingActivity implements LauncherExterns,
         return Stream.of(APP_INFO, WIDGETS, INSTALL);
     }
 
+
+    /**
+     * @see LauncherState#getOverviewScaleAndOffset(Launcher)
+     */
+    public float[] getNormalOverviewScaleAndOffset() {
+        return new float[] {NO_SCALE, NO_OFFSET};
+    }
+
     public static Launcher getLauncher(Context context) {
         return fromContext(context);
     }
@@ -2710,6 +2736,7 @@ public class Launcher extends BaseDraggingActivity implements LauncherExterns,
     public static <T extends Launcher> T cast(ActivityContext activityContext) {
         return (T) activityContext;
     }
+
 
     /**
      * Callback for listening for onResume

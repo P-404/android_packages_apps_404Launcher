@@ -20,6 +20,7 @@ import android.content.res.Resources;
 import android.graphics.PointF;
 import android.graphics.RectF;
 import android.view.Surface;
+import android.view.View;
 
 import com.android.launcher3.Utilities;
 
@@ -36,7 +37,7 @@ public class SeascapePagedViewHandler extends LandscapePagedViewHandler {
     }
 
     @Override
-    public void offsetTaskRect(RectF rect, float value, int displayRotation) {
+    public void offsetTaskRect(RectF rect, float value, int displayRotation, int launcherRotation) {
         if (displayRotation == Surface.ROTATION_0) {
             rect.offset(0, value);
         } else if (displayRotation == Surface.ROTATION_90) {
@@ -63,5 +64,15 @@ public class SeascapePagedViewHandler extends LandscapePagedViewHandler {
         float oldX = velocity.x;
         float oldY = velocity.y;
         velocity.set(oldY, -oldX);
+    }
+
+    @Override
+    public float getTaskMenuX(float x, View thumbnailView) {
+        return x;
+    }
+
+    @Override
+    public float getTaskMenuY(float y, View thumbnailView) {
+        return y + thumbnailView.getMeasuredHeight();
     }
 }

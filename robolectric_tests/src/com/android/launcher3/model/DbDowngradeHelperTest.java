@@ -36,11 +36,11 @@ import com.android.launcher3.LauncherProvider;
 import com.android.launcher3.LauncherProvider.DatabaseHelper;
 import com.android.launcher3.LauncherSettings.Favorites;
 import com.android.launcher3.R;
-import com.android.launcher3.util.LauncherRoboTestRunner;
 
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
+import org.robolectric.RobolectricTestRunner;
 import org.robolectric.RuntimeEnvironment;
 
 import java.io.File;
@@ -48,7 +48,7 @@ import java.io.File;
 /**
  * Tests for {@link DbDowngradeHelper}
  */
-@RunWith(LauncherRoboTestRunner.class)
+@RunWith(RobolectricTestRunner.class)
 public class DbDowngradeHelperTest {
 
     private static final String SCHEMA_FILE = "test_schema.json";
@@ -130,7 +130,7 @@ public class DbDowngradeHelperTest {
         }
         helper.close();
 
-        helper = new DatabaseHelper(mContext, DB_FILE) {
+        helper = new DatabaseHelper(mContext, DB_FILE, false) {
             @Override
             public void onOpen(SQLiteDatabase db) { }
         };
@@ -161,7 +161,7 @@ public class DbDowngradeHelperTest {
 
         DbDowngradeHelper.updateSchemaFile(mSchemaFile, LauncherProvider.SCHEMA_VERSION, mContext);
 
-        DatabaseHelper dbHelper = new DatabaseHelper(mContext, DB_FILE) {
+        DatabaseHelper dbHelper = new DatabaseHelper(mContext, DB_FILE, false) {
             @Override
             public void onOpen(SQLiteDatabase db) { }
         };

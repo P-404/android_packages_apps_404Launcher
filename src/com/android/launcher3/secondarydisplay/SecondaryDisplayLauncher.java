@@ -28,18 +28,18 @@ import android.view.ViewAnimationUtils;
 import android.view.inputmethod.InputMethodManager;
 
 import com.android.launcher3.AbstractFloatingView;
-import com.android.launcher3.AppInfo;
 import com.android.launcher3.BaseDraggingActivity;
 import com.android.launcher3.InvariantDeviceProfile;
-import com.android.launcher3.ItemInfo;
 import com.android.launcher3.LauncherAppState;
-import com.android.launcher3.LauncherAppWidgetInfo;
 import com.android.launcher3.LauncherModel;
-import com.android.launcher3.PromiseAppInfo;
 import com.android.launcher3.R;
-import com.android.launcher3.WorkspaceItemInfo;
 import com.android.launcher3.allapps.AllAppsContainerView;
 import com.android.launcher3.model.BgDataModel;
+import com.android.launcher3.model.data.AppInfo;
+import com.android.launcher3.model.data.ItemInfo;
+import com.android.launcher3.model.data.LauncherAppWidgetInfo;
+import com.android.launcher3.model.data.PromiseAppInfo;
+import com.android.launcher3.model.data.WorkspaceItemInfo;
 import com.android.launcher3.popup.PopupDataProvider;
 import com.android.launcher3.util.ComponentKey;
 import com.android.launcher3.util.IntArray;
@@ -89,17 +89,16 @@ public class SecondaryDisplayLauncher extends BaseDraggingActivity
         if (mDragLayer != null) {
             return;
         }
-        InvariantDeviceProfile mainIdp = LauncherAppState.getIDP(this);
         InvariantDeviceProfile currentDisplayIdp =
                 new InvariantDeviceProfile(this, getWindow().getDecorView().getDisplay());
 
-        // Pick the device profile with the smaller icon size so that the cached icons are
-        // shown properly
-        if (mainIdp.iconBitmapSize <= currentDisplayIdp.iconBitmapSize) {
-            mDeviceProfile = mainIdp.getDeviceProfile(this).copy(this);
-        } else {
-            mDeviceProfile = currentDisplayIdp.getDeviceProfile(this);
-        }
+        // Disable transpose layout and use multi-window mode so that the icons are scaled properly
+        mDeviceProfile = currentDisplayIdp.getDeviceProfile(this)
+                .toBuilder(this)
+                .setMultiWindowMode(true)
+                .setTransposeLayoutWithOrientation(false)
+                .build();
+        mDeviceProfile.autoResizeAllAppsCells();
 
         setContentView(R.layout.secondary_launcher);
         mDragLayer = findViewById(R.id.drag_layer);

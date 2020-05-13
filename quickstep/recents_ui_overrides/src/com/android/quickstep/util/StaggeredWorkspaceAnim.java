@@ -21,12 +21,14 @@ import static com.android.launcher3.LauncherState.NORMAL;
 import static com.android.launcher3.anim.Interpolators.ACCEL_DEACCEL;
 import static com.android.launcher3.anim.Interpolators.LINEAR;
 import static com.android.launcher3.states.StateAnimationConfig.ANIM_ALL_COMPONENTS;
+import static com.android.launcher3.states.StateAnimationConfig.SKIP_DEPTH_CONTROLLER;
 import static com.android.launcher3.states.StateAnimationConfig.SKIP_OVERVIEW;
 
 import android.animation.Animator;
 import android.animation.AnimatorListenerAdapter;
 import android.animation.AnimatorSet;
 import android.animation.ObjectAnimator;
+import android.animation.ValueAnimator;
 import android.view.View;
 import android.view.ViewGroup;
 
@@ -146,7 +148,7 @@ public class StaggeredWorkspaceAnim {
      */
     private void prepareToAnimate(Launcher launcher) {
         StateAnimationConfig config = new StateAnimationConfig();
-        config.animFlags = ANIM_ALL_COMPONENTS | SKIP_OVERVIEW;
+        config.animFlags = ANIM_ALL_COMPONENTS | SKIP_OVERVIEW | SKIP_DEPTH_CONTROLLER;
         config.duration = 0;
         // setRecentsAttachedToAppWindow() will animate recents out.
         launcher.getStateManager().createAtomicAnimation(BACKGROUND_APP, NORMAL, config).start();
@@ -184,13 +186,14 @@ public class StaggeredWorkspaceAnim {
         ResourceProvider rp = DynamicResource.provider(v.getContext());
         float stiffness = rp.getFloat(R.dimen.staggered_stiffness);
         float damping = rp.getFloat(R.dimen.staggered_damping_ratio);
-        ObjectAnimator springTransY = new SpringAnimationBuilder<>(v, VIEW_TRANSLATE_Y)
+        ValueAnimator springTransY = new SpringAnimationBuilder(v.getContext())
                 .setStiffness(stiffness)
                 .setDampingRatio(damping)
                 .setMinimumVisibleChange(1f)
+                .setStartValue(mSpringTransY)
                 .setEndValue(0)
                 .setStartVelocity(mVelocity)
-                .build(v.getContext());
+                .build(v, VIEW_TRANSLATE_Y);
         springTransY.setStartDelay(startDelay);
         mAnimators.play(springTransY);
 

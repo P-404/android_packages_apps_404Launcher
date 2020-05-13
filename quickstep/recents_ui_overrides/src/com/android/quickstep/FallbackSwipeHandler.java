@@ -40,9 +40,7 @@ import android.view.MotionEvent;
 import com.android.launcher3.R;
 import com.android.launcher3.anim.AnimationSuccessListener;
 import com.android.launcher3.anim.AnimatorPlaybackController;
-import com.android.launcher3.touch.LandscapePagedViewHandler;
 import com.android.launcher3.touch.PagedOrientationHandler;
-import com.android.launcher3.touch.PortraitPagedViewHandler;
 import com.android.launcher3.util.ObjectWrapper;
 import com.android.quickstep.BaseActivityInterface.HomeAnimationFactory;
 import com.android.quickstep.GestureState.GestureEndTarget;
@@ -131,6 +129,7 @@ public class FallbackSwipeHandler extends BaseSwipeUpHandler<RecentsActivity, Fa
         mEndTargetAnimationParams.put(LAST_TASK, new EndTargetAnimationParams(0, 150, 1));
         mEndTargetAnimationParams.put(NEW_TASK, new EndTargetAnimationParams(0, 150, 1));
 
+        initAfterSubclassConstructor();
         initStateCallbacks();
     }
 
@@ -190,10 +189,10 @@ public class FallbackSwipeHandler extends BaseSwipeUpHandler<RecentsActivity, Fa
     }
 
     @Override
-    public void initWhenReady() {
+    public void initWhenReady(Intent intent) {
         if (mInQuickSwitchMode) {
             // Only init if we are in quickswitch mode
-            super.initWhenReady();
+            super.initWhenReady(intent);
         }
     }
 
@@ -503,8 +502,8 @@ public class FallbackSwipeHandler extends BaseSwipeUpHandler<RecentsActivity, Fa
                 PagedOrientationHandler orientationHandler = mRecentsView != null
                         ? mRecentsView.getPagedOrientationHandler()
                         : (mDp.isLandscape
-                                ? new LandscapePagedViewHandler()
-                                : new PortraitPagedViewHandler());
+                                ? PagedOrientationHandler.LANDSCAPE
+                                : PagedOrientationHandler.PORTRAIT);
                 return HomeAnimationFactory
                     .getDefaultWindowTargetRect(orientationHandler, mDp);
             }

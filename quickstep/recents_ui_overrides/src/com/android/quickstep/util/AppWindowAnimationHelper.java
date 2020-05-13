@@ -15,6 +15,13 @@
  */
 package com.android.quickstep.util;
 
+import static com.android.launcher3.config.FeatureFlags.ENABLE_QUICKSTEP_LIVE_TILE;
+import static com.android.systemui.shared.system.QuickStepContract.getWindowCornerRadius;
+import static com.android.systemui.shared.system.QuickStepContract.supportsRoundedCornersOnWindows;
+import static com.android.systemui.shared.system.RemoteAnimationTargetCompat.ACTIVITY_TYPE_HOME;
+import static com.android.systemui.shared.system.RemoteAnimationTargetCompat.MODE_CLOSING;
+import static com.android.systemui.shared.system.RemoteAnimationTargetCompat.MODE_OPENING;
+
 import android.annotation.TargetApi;
 import android.content.Context;
 import android.content.res.Resources;
@@ -23,17 +30,14 @@ import android.graphics.Matrix.ScaleToFit;
 import android.graphics.Rect;
 import android.graphics.RectF;
 import android.os.Build;
-import android.view.Surface;
 
 import androidx.annotation.Nullable;
 
 import com.android.launcher3.BaseDraggingActivity;
 import com.android.launcher3.DeviceProfile;
-import com.android.launcher3.LauncherState;
 import com.android.launcher3.R;
 import com.android.launcher3.Utilities;
 import com.android.launcher3.anim.Interpolators;
-import com.android.launcher3.model.PagedViewOrientedState;
 import com.android.launcher3.views.BaseDragLayer;
 import com.android.quickstep.RemoteAnimationTargets;
 import com.android.quickstep.SystemUiProxy;
@@ -47,13 +51,6 @@ import com.android.systemui.shared.system.SyncRtSurfaceTransactionApplierCompat.
 import com.android.systemui.shared.system.TransactionCompat;
 import com.android.systemui.shared.system.WindowManagerWrapper;
 
-import static com.android.launcher3.config.FeatureFlags.ENABLE_QUICKSTEP_LIVE_TILE;
-import static com.android.systemui.shared.system.QuickStepContract.getWindowCornerRadius;
-import static com.android.systemui.shared.system.QuickStepContract.supportsRoundedCornersOnWindows;
-import static com.android.systemui.shared.system.RemoteAnimationTargetCompat.ACTIVITY_TYPE_HOME;
-import static com.android.systemui.shared.system.RemoteAnimationTargetCompat.MODE_CLOSING;
-import static com.android.systemui.shared.system.RemoteAnimationTargetCompat.MODE_OPENING;
-
 /**
  * Utility class to handle window clip animation
  */
@@ -61,7 +58,7 @@ import static com.android.systemui.shared.system.RemoteAnimationTargetCompat.MOD
 public class AppWindowAnimationHelper {
 
     // The bounds of the source app in device coordinates
-    private final Rect mSourceStackBounds = new Rect();
+    private final RectF mSourceStackBounds = new RectF();
     // The insets of the source app
     private final Rect mSourceInsets = new Rect();
     // The source app bounds with the source insets applied, in the device coordinates
@@ -86,7 +83,7 @@ public class AppWindowAnimationHelper {
     private final Rect mTmpRect = new Rect();
     private final RectF mTmpRectF = new RectF();
     private final RectF mCurrentRectWithInsets = new RectF();
-    private PagedViewOrientedState mOrientedState;
+    private RecentsOrientedState mOrientedState;
     // Corner radius of windows, in pixels
     private final float mWindowCornerRadius;
     // Corner radius of windows when they're in overview mode.
@@ -105,7 +102,7 @@ public class AppWindowAnimationHelper {
     private TargetAlphaProvider mTaskAlphaCallback = (t, a) -> a;
     private TargetAlphaProvider mBaseAlphaCallback = (t, a) -> 1;
 
-    public AppWindowAnimationHelper(PagedViewOrientedState orientedState, Context context) {
+    public AppWindowAnimationHelper(RecentsOrientedState orientedState, Context context) {
         Resources res = context.getResources();
         mOrientedState = orientedState;
         mWindowCornerRadius = getWindowCornerRadius(res);
@@ -160,14 +157,10 @@ public class AppWindowAnimationHelper {
         mSourceRect.set(scaledTargetRect);
     }
 
-    private float getSrcToTargetScale() {
-        if (mOrientedState == null ||
-            (mOrientedState.getDisplayRotation() == Surface.ROTATION_0
-                || mOrientedState.getDisplayRotation() == Surface.ROTATION_180)) {
-            return mSourceRect.width() / mTargetRect.width();
-        } else {
-            return mSourceRect.height() / mTargetRect.height();
-        }
+    public float getSrcToTargetScale() {
+        return LayoutUtils.getTaskScale(mOrientedState,
+                mSourceRect.width(), mSourceRect.height(),
+                mTargetRect.width(), mTargetRect.height());
     }
 
     public void prepareAnimation(DeviceProfile dp, boolean isOpening) {
@@ -215,7 +208,6 @@ public class AppWindowAnimationHelper {
             float alpha;
             float cornerRadius = 0f;
             float scale = Math.max(mCurrentRect.width(), mTargetRect.width()) / crop.width();
-            int layer = RemoteAnimationProvider.getLayer(app, mBoostModeTargetLayers);
             if (app.mode == params.mTargetSet.targetMode) {
                 alpha = mTaskAlphaCallback.getAlpha(app, params.mTargetAlpha);
                 if (app.activityType != RemoteAnimationTargetCompat.ACTIVITY_TYPE_HOME) {
@@ -252,13 +244,11 @@ public class AppWindowAnimationHelper {
                 alpha = mBaseAlphaCallback.getAlpha(app, progress);
                 if (ENABLE_QUICKSTEP_LIVE_TILE.get() && params.mLauncherOnTop) {
                     crop = null;
-                    layer = Integer.MAX_VALUE;
                 }
             }
             builder.withAlpha(alpha)
                     .withMatrix(mTmpMatrix)
                     .withWindowCrop(crop)
-                    .withLayer(layer)
                     // Since radius is in Surface space, but we draw the rounded corners in screen
                     // space, we have to undo the scale
                     .withCornerRadius(cornerRadius / scale);
@@ -274,12 +264,14 @@ public class AppWindowAnimationHelper {
             mTmpRectF.set(mTargetRect);
             Utilities.scaleRectFAboutCenter(mTmpRectF, params.mOffsetScale);
             mCurrentRect.set(mRectFEvaluator.evaluate(params.mProgress, mSourceRect, mTmpRectF));
-            if (mOrientedState == null || mOrientedState.areMultipleLayoutOrientationsDisabled()) {
+            if (mOrientedState == null
+                    || !mOrientedState.isMultipleOrientationSupportedByDevice()) {
                 mCurrentRect.offset(params.mOffset, 0);
             } else {
                 int displayRotation = mOrientedState.getDisplayRotation();
+                int launcherRotation = mOrientedState.getLauncherRotation();
                 mOrientedState.getOrientationHandler().offsetTaskRect(mCurrentRect,
-                    params.mOffset, displayRotation);
+                    params.mOffset, displayRotation, launcherRotation);
             }
         }
 
@@ -376,15 +368,6 @@ public class AppWindowAnimationHelper {
         recentsView.getTaskSize(taskSize);
         updateTargetRect(taskSize);
         return this;
-    }
-
-    /**
-     * @return The source rect's scale and translation relative to the target rect.
-     */
-    public LauncherState.ScaleAndTranslation getScaleAndTranslation() {
-        float scale = getSrcToTargetScale();
-        float translationY = mSourceRect.centerY() - mSourceRect.top - mTargetRect.centerY();
-        return new LauncherState.ScaleAndTranslation(scale, 0, translationY);
     }
 
     private void updateStackBoundsToMultiWindowTaskSize(BaseDraggingActivity activity) {
