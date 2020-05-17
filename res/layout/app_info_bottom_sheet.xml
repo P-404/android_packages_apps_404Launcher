@@ -17,7 +17,9 @@
         android:layout_height="wrap_content"
         android:gravity="center_horizontal"
         android:textColor="?android:attr/textColorPrimary"
-        android:textSize="24sp"/>
+        android:textSize="24sp"
+        android:paddingLeft="@dimen/bottom_sheet_title_padding"
+        android:paddingRight="@dimen/bottom_sheet_title_padding" />
 
     <TextView
         android:layout_width="match_parent"
