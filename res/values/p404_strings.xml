@@ -45,4 +45,8 @@
     <string name="msg_minus_one_on_left">When you swipe right from main home screen</string>
     <string name="msg_minus_one_on_right">When you swipe left from main home screen</string>
 
+    <!-- QSB -->
+    <string name="label_search">Search</string>
+    <string name="label_voice_search">Voice search</string>
+
 </resources>
