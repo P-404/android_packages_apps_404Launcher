@@ -71,12 +71,26 @@
     <PreferenceCategory android:key="category_customization"
         android:title="@string/category_customization">
 
-        <com.p404.launcher.settings.ReloadingListPreference
-            android:key="pref_icon_pack"
-            android:title="@string/app_info_icon_pack"
-            android:summary="%s"
-            android:defaultValue=""
-            android:persistent="true" />
+    <com.p404.launcher.settings.ReloadingListPreference
+        android:key="pref_icon_pack"
+        android:title="@string/app_info_icon_pack"
+        android:summary="%s"
+        android:defaultValue=""
+        android:persistent="true" />
+
+    <SwitchPreference
+        android:key="pref_show_workspace_grad"
+        android:title="@string/workspace_gradient_title"
+        android:summary="@string/workspace_gradient_summary"
+        android:defaultValue="true"
+        android:persistent="true"/>
+
+    <SwitchPreference
+        android:key="pref_show_hotseat_grad"
+        android:title="@string/hotseat_gradient_title"
+        android:summary="@string/hotseat_gradient_summary"
+        android:defaultValue="true"
+        android:persistent="true"/>
 
     </PreferenceCategory>
 
@@ -107,7 +121,6 @@
         android:entryValues="@array/grid_values"
         android:defaultValue="-1"
         android:persistent="true" />
-
 
     <ListPreference
         android:key="pref_hotseat_icons"
