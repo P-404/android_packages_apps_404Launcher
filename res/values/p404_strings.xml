@@ -66,4 +66,8 @@
 
     <!-- Icon size -->
     <string name="icon_size_title">Icon size</string>
+
+    <!-- Hide labels -->
+    <string name="desktop_show_labels">Show icon labels on desktop</string>
+    <string name="drawer_show_labels">Show icon labels in drawer</string>
 </resources>
