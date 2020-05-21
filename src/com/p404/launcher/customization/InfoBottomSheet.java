@@ -2,6 +2,8 @@ package com.p404.launcher.customization;
 
 import android.app.Fragment;
 import android.app.FragmentManager;
+import android.content.ClipData;
+import android.content.ClipboardManager;
 import android.content.ComponentName;
 import android.content.Context;
 import android.os.Bundle;
@@ -22,6 +24,8 @@ import com.android.launcher3.util.ComponentKey;
 import com.android.launcher3.widget.WidgetsBottomSheet;
 
 public class InfoBottomSheet extends WidgetsBottomSheet {
+    private static final String CLIP_LABEL = "ComponentName";
+
     private final FragmentManager mFragmentManager;
     private View.OnClickListener mOnAppInfoClick;
 
@@ -47,6 +51,14 @@ public class InfoBottomSheet extends WidgetsBottomSheet {
         super.populateAndShow(itemInfo);
         TextView title = findViewById(R.id.title);
         title.setText(itemInfo.title);
+        title.setOnLongClickListener(p -> {
+            ClipboardManager cm = getContext().getSystemService(ClipboardManager.class);
+            if (cm != null) {
+                String str = itemInfo.getTargetComponent().flattenToString();
+                cm.setPrimaryClip(ClipData.newPlainText(CLIP_LABEL, str));
+            }
+            return false;
+        });
 
         // Use a proxy so we can update the reference at runtime.
         View.OnClickListener l = v -> mOnAppInfoClick.onClick(v);
