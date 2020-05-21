@@ -341,6 +341,7 @@ public class SettingsActivity extends Activity
 
         @Override
         public void onDestroy() {
+            LauncherAppState.getInstanceNoCreate().checkIfRestartNeeded();
             if (mNotificationDotsObserver != null) {
                 mNotificationDotsObserver.unregister();
                 mNotificationDotsObserver = null;
