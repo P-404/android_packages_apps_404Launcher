@@ -27,4 +27,5 @@
     <!-- Custom icon pack as default. Can be empty -->
     <string name="config_defaultIconPackPackage" translatable="false"></string>
 
+    <color name="app_info_bottom_sheet_bg">#ffffff</color>
 </resources>
