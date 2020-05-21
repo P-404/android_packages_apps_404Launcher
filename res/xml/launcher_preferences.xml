@@ -75,7 +75,7 @@
         android:key="pref_icon_pack"
         android:title="@string/app_info_icon_pack"
         android:summary="%s"
-        android:defaultValue=""
+        android:defaultValue="@string/config_defaultIconPackPackage"
         android:persistent="true" />
 
     <SwitchPreference
