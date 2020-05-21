@@ -83,7 +83,7 @@ import com.p404.launcher.search.SearchHandler;
 
 public class AllAppsQsbContainer extends FrameLayout implements Insettable, OnClickListener, OnChangeListener, OnUpdateListener, SearchUiManager {
 
-    private static final long SEARCH_TASK_DELAY_MS = 700;
+    private static final long SEARCH_TASK_DELAY_MS = 450;
 
     private AllAppsContainerView mAppsView;
     private Bitmap mQsbScroll;
