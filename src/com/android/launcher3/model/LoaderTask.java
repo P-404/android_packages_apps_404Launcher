@@ -45,6 +45,8 @@ import android.util.LongSparseArray;
 import android.util.MutableInt;
 import android.util.TimingLogger;
 
+import androidx.annotation.WorkerThread;
+
 import com.android.launcher3.InstallShortcutReceiver;
 import com.android.launcher3.LauncherAppState;
 import com.android.launcher3.LauncherModel;
@@ -850,21 +852,22 @@ public class LoaderTask implements Runnable {
         }
     }
 
-    private List<AppInfo> loadCachedPredictions() {
-        List<ComponentKey> componentKeys = mApp.getPredictionModel().getPredictionComponentKeys();
-        List<AppInfo> results = new ArrayList<>();
-        if (componentKeys == null) return results;
-        List<LauncherActivityInfo> l;
-        mBgDataModel.cachedPredictedItems.clear();
-        for (ComponentKey key : componentKeys) {
-            l = mLauncherApps.getActivityList(key.componentName.getPackageName(), key.user);
-            if (l.size() == 0) continue;
-            boolean quietMode = mUserManager.isQuietModeEnabled(key.user);
-            AppInfo info = new AppInfo(l.get(0), key.user, quietMode);
-            mBgDataModel.cachedPredictedItems.add(info);
-            mIconCache.getTitleAndIcon(info, false);
+    @WorkerThread
+    private void loadCachedPredictions() {
+        synchronized (mBgDataModel) {
+            List<ComponentKey> componentKeys =
+                    mApp.getPredictionModel().getPredictionComponentKeys();
+            List<LauncherActivityInfo> l;
+            mBgDataModel.cachedPredictedItems.clear();
+            for (ComponentKey key : componentKeys) {
+                l = mLauncherApps.getActivityList(key.componentName.getPackageName(), key.user);
+                if (l.size() == 0) continue;
+                boolean quietMode = mUserManager.isQuietModeEnabled(key.user);
+                AppInfo info = new AppInfo(l.get(0), key.user, quietMode);
+                mBgDataModel.cachedPredictedItems.add(info);
+                mIconCache.getTitleAndIcon(info, false);
+            }
         }
-        return results;
     }
 
     private List<LauncherActivityInfo> loadAllApps() {

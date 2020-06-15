@@ -15,42 +15,52 @@
  */
 package com.android.quickstep.util;
 
-import static android.view.Surface.ROTATION_0;
-
 import static com.android.launcher3.states.RotationHelper.deltaRotation;
 import static com.android.launcher3.touch.PagedOrientationHandler.MATRIX_POST_TRANSLATE;
-import static com.android.quickstep.util.AppWindowAnimationHelper.applySurfaceParams;
-import static com.android.quickstep.util.RecentsOrientedState.isFixedRotationTransformEnabled;
 import static com.android.quickstep.util.RecentsOrientedState.postDisplayRotation;
 import static com.android.systemui.shared.system.WindowManagerWrapper.WINDOWING_MODE_FULLSCREEN;
 
+import android.animation.TimeInterpolator;
 import android.content.Context;
 import android.graphics.Matrix;
+import android.graphics.Point;
 import android.graphics.PointF;
 import android.graphics.Rect;
 import android.graphics.RectF;
+import android.util.IntProperty;
 
 import com.android.launcher3.DeviceProfile;
 import com.android.launcher3.R;
 import com.android.launcher3.Utilities;
-import com.android.launcher3.anim.Interpolators;
+import com.android.launcher3.anim.PendingAnimation;
 import com.android.launcher3.touch.PagedOrientationHandler;
 import com.android.quickstep.AnimatedFloat;
-import com.android.quickstep.RecentsAnimationTargets;
-import com.android.quickstep.util.AppWindowAnimationHelper.TargetAlphaProvider;
-import com.android.quickstep.util.AppWindowAnimationHelper.TransformParams;
+import com.android.quickstep.BaseActivityInterface;
 import com.android.quickstep.views.RecentsView.ScrollState;
 import com.android.quickstep.views.TaskThumbnailView.PreviewPositionHelper;
 import com.android.quickstep.views.TaskView;
 import com.android.quickstep.views.TaskView.FullscreenDrawParams;
 import com.android.systemui.shared.recents.model.ThumbnailData;
 import com.android.systemui.shared.system.RemoteAnimationTargetCompat;
-import com.android.systemui.shared.system.SyncRtSurfaceTransactionApplierCompat.SurfaceParams;
+import com.android.systemui.shared.system.SyncRtSurfaceTransactionApplierCompat.SurfaceParams.Builder;
 
 /**
  * A utility class which emulates the layout behavior of TaskView and RecentsView
  */
-public class TaskViewSimulator {
+public class TaskViewSimulator implements TransformParams.BuilderProxy {
+
+    public static final IntProperty<TaskViewSimulator> SCROLL =
+            new IntProperty<TaskViewSimulator>("scroll") {
+        @Override
+        public void setValue(TaskViewSimulator simulator, int i) {
+            simulator.setScroll(i);
+        }
+
+        @Override
+        public Integer get(TaskViewSimulator simulator) {
+            return simulator.mScrollState.scroll;
+        }
+    };
 
     private final Rect mTmpCropRect = new Rect();
     private final RectF mTempRectF = new RectF();
@@ -58,22 +68,19 @@ public class TaskViewSimulator {
 
     private final RecentsOrientedState mOrientationState;
     private final Context mContext;
-    private final WindowSizeStrategy mSizeStrategy;
+    private final BaseActivityInterface mSizeStrategy;
 
     private final Rect mTaskRect = new Rect();
     private final PointF mPivot = new PointF();
     private DeviceProfile mDp;
 
     private final Matrix mMatrix = new Matrix();
-    private RemoteAnimationTargetCompat mRunningTarget;
-    private RecentsAnimationTargets mAllTargets;
-
-    private TargetAlphaProvider mTaskAlphaCallback = (t, a) -> a;
+    private final Point mRunningTargetWindowPosition = new Point();
 
     // Thumbnail view properties
     private final Rect mThumbnailPosition = new Rect();
     private final ThumbnailData mThumbnailData = new ThumbnailData();
-    private final PreviewPositionHelper mPositionHelper;
+    private final PreviewPositionHelper mPositionHelper = new PreviewPositionHelper();
     private final Matrix mInversePositionMatrix = new Matrix();
 
     // TaskView properties
@@ -81,8 +88,8 @@ public class TaskViewSimulator {
     private float mCurveScale = 1;
 
     // RecentsView properties
-    public final AnimatedFloat recentsViewScale = new AnimatedFloat(() -> { });
-    public final AnimatedFloat fullScreenProgress = new AnimatedFloat(() -> { });
+    public final AnimatedFloat recentsViewScale = new AnimatedFloat();
+    public final AnimatedFloat fullScreenProgress = new AnimatedFloat();
     private final ScrollState mScrollState = new ScrollState();
     private final int mPageSpacing;
 
@@ -90,15 +97,11 @@ public class TaskViewSimulator {
     private boolean mLayoutValid = false;
     private boolean mScrollValid = false;
 
-    public TaskViewSimulator(Context context, WindowSizeStrategy sizeStrategy) {
+    public TaskViewSimulator(Context context, BaseActivityInterface sizeStrategy) {
         mContext = context;
         mSizeStrategy = sizeStrategy;
-        mPositionHelper = new PreviewPositionHelper(context);
 
         mOrientationState = new RecentsOrientedState(context, sizeStrategy, i -> { });
-        // We do not need to attach listeners as the simulator is created just for the gesture
-        // duration, and any settings are unlikely to change during this
-        mOrientationState.initWithoutListeners();
 
         mCurrentFullscreenParams = new FullscreenDrawParams(context);
         mPageSpacing = context.getResources().getDimensionPixelSize(R.dimen.recents_page_spacing);
@@ -117,15 +120,7 @@ public class TaskViewSimulator {
      * @see com.android.quickstep.views.RecentsView#setLayoutRotation(int, int)
      */
     public void setLayoutRotation(int touchRotation, int displayRotation) {
-        int launcherRotation;
-        if (!mOrientationState.isMultipleOrientationSupportedByDevice()
-                || mOrientationState.isHomeRotationAllowed()) {
-            launcherRotation = displayRotation;
-        } else {
-            launcherRotation = ROTATION_0;
-        }
-
-        mOrientationState.update(touchRotation, displayRotation, launcherRotation);
+        mOrientationState.update(touchRotation, displayRotation);
         mLayoutValid = false;
     }
 
@@ -136,25 +131,28 @@ public class TaskViewSimulator {
         if (mDp == null) {
             return 1;
         }
-        mSizeStrategy.calculateTaskSize(mContext, mDp, mTaskRect);
+        mSizeStrategy.calculateTaskSize(mContext, mDp, mTaskRect,
+                mOrientationState.getOrientationHandler());
         return mOrientationState.getFullScreenScaleAndPivot(mTaskRect, mDp, mPivot);
     }
 
     /**
      * Sets the targets which the simulator will control
      */
-    public void setPreview(
-            RemoteAnimationTargetCompat runningTarget, RecentsAnimationTargets allTargets) {
-        mRunningTarget = runningTarget;
-        mAllTargets = allTargets;
+    public void setPreview(RemoteAnimationTargetCompat runningTarget) {
+        setPreviewBounds(runningTarget.screenSpaceBounds, runningTarget.contentInsets);
+        mRunningTargetWindowPosition.set(runningTarget.position.x, runningTarget.position.y);
+    }
 
-        mThumbnailData.insets.set(mRunningTarget.contentInsets);
+    /**
+     * Sets the targets which the simulator will control
+     */
+    public void setPreviewBounds(Rect bounds, Rect insets) {
+        mThumbnailData.insets.set(insets);
         // TODO: What is this?
         mThumbnailData.windowingMode = WINDOWING_MODE_FULLSCREEN;
 
-        mThumbnailPosition.set(runningTarget.screenSpaceBounds);
-        // TODO: Should sourceContainerBounds already have this offset?
-        mThumbnailPosition.offset(-mRunningTarget.position.x, -mRunningTarget.position.y);
+        mThumbnailPosition.set(bounds);
         mLayoutValid = false;
     }
 
@@ -169,29 +167,65 @@ public class TaskViewSimulator {
     }
 
     /**
-     * Sets an alternate function which can be used to control the alpha
+     * Adds animation for all the components corresponding to transition from an app to overview
      */
-    public void setTaskAlphaCallback(TargetAlphaProvider callback) {
-        mTaskAlphaCallback = callback;
+    public void addAppToOverviewAnim(PendingAnimation pa, TimeInterpolator interpolator) {
+        pa.addFloat(fullScreenProgress, AnimatedFloat.VALUE, 1, 0, interpolator);
+        pa.addFloat(recentsViewScale, AnimatedFloat.VALUE, getFullScreenScale(), 1, interpolator);
+    }
+
+    /**
+     * Returns the current clipped/visible window bounds in the window coordinate space
+     */
+    public RectF getCurrentCropRect() {
+        // Crop rect is the inverse of thumbnail matrix
+        RectF insets = mCurrentFullscreenParams.mCurrentDrawnInsets;
+        mTempRectF.set(-insets.left, -insets.top,
+                mTaskRect.width() + insets.right, mTaskRect.height() + insets.bottom);
+        mInversePositionMatrix.mapRect(mTempRectF);
+        return mTempRectF;
+    }
+
+    public RecentsOrientedState getOrientationState() {
+        return mOrientationState;
+    }
+
+    /**
+     * Returns the current transform applied to the window
+     */
+    public Matrix getCurrentMatrix() {
+        return mMatrix;
+    }
+
+    /**
+     * Applies the rotation on the matrix to so that it maps from launcher coordinate space to
+     * window coordinate space.
+     */
+    public void applyWindowToHomeRotation(Matrix matrix) {
+        mMatrix.postTranslate(mDp.windowX, mDp.windowY);
+        postDisplayRotation(deltaRotation(
+                mOrientationState.getLauncherRotation(), mOrientationState.getDisplayRotation()),
+                mDp.widthPx, mDp.heightPx, matrix);
+        matrix.postTranslate(-mRunningTargetWindowPosition.x, -mRunningTargetWindowPosition.y);
     }
 
     /**
      * Applies the target to the previously set parameters
      */
     public void apply(TransformParams params) {
-        if (mDp == null || mRunningTarget == null) {
+        if (mDp == null || mThumbnailPosition.isEmpty()) {
             return;
         }
         if (!mLayoutValid) {
             mLayoutValid = true;
 
             getFullScreenScale();
-            mThumbnailData.rotation = isFixedRotationTransformEnabled(mContext)
-                    ? mOrientationState.getDisplayRotation() : mPositionHelper.getCurrentRotation();
+            mThumbnailData.rotation = mOrientationState.getDisplayRotation();
 
-            mPositionHelper.updateThumbnailMatrix(mThumbnailPosition, mThumbnailData,
-                    mTaskRect.width(), mTaskRect.height(), mDp);
-
+            mPositionHelper.updateThumbnailMatrix(
+                    mThumbnailPosition, mThumbnailData,
+                    mTaskRect.width(), mTaskRect.height(),
+                    mDp, mOrientationState.getLauncherRotation());
             mPositionHelper.getMatrix().invert(mInversePositionMatrix);
 
             PagedOrientationHandler poh = mOrientationState.getOrientationHandler();
@@ -200,7 +234,6 @@ public class TaskViewSimulator {
             mScrollState.halfScreenSize = poh.getPrimaryValue(mDp.widthPx, mDp.heightPx) / 2;
             mScrollValid = false;
         }
-
 
         if (!mScrollValid) {
             mScrollValid = true;
@@ -233,11 +266,7 @@ public class TaskViewSimulator {
 
         // Apply recensView matrix
         mMatrix.postScale(recentsViewScale.value, recentsViewScale.value, mPivot.x, mPivot.y);
-        postDisplayRotation(deltaRotation(
-                mOrientationState.getLauncherRotation(), mOrientationState.getDisplayRotation()),
-                mDp.widthPx, mDp.heightPx, mMatrix);
-        mMatrix.postTranslate(mDp.windowX - mRunningTarget.position.x,
-                mDp.windowY - mRunningTarget.position.y);
+        applyWindowToHomeRotation(mMatrix);
 
         // Crop rect is the inverse of thumbnail matrix
         mTempRectF.set(-insets.left, -insets.top,
@@ -245,35 +274,15 @@ public class TaskViewSimulator {
         mInversePositionMatrix.mapRect(mTempRectF);
         mTempRectF.roundOut(mTmpCropRect);
 
-        SurfaceParams[] surfaceParams = new SurfaceParams[mAllTargets.unfilteredApps.length];
-        for (int i = 0; i < mAllTargets.unfilteredApps.length; i++) {
-            RemoteAnimationTargetCompat app = mAllTargets.unfilteredApps[i];
-            SurfaceParams.Builder builder = new SurfaceParams.Builder(app.leash);
+        params.applySurfaceParams(params.createSurfaceParams(this));
+    }
 
-            if (app.mode == mAllTargets.targetMode) {
-                float alpha = mTaskAlphaCallback.getAlpha(app, params.getTargetAlpha());
-                if (app.activityType != RemoteAnimationTargetCompat.ACTIVITY_TYPE_HOME) {
-                    // Fade out Assistant overlay.
-                    if (app.activityType == RemoteAnimationTargetCompat.ACTIVITY_TYPE_ASSISTANT
-                            && app.isNotInRecents) {
-                        alpha = Interpolators.ACCEL_2.getInterpolation(fullScreenProgress.value);
-                    }
-
-                    builder.withAlpha(alpha)
-                            .withMatrix(mMatrix)
-                            .withWindowCrop(mTmpCropRect)
-                            .withCornerRadius(getCurrentCornerRadius());
-                } else if (params.getTargetSet().hasRecents) {
-                    // If home has a different target then recents, reverse anim the home target.
-                    builder.withAlpha(fullScreenProgress.value * params.getTargetAlpha());
-                }
-            } else {
-                builder.withAlpha(1);
-            }
-            surfaceParams[i] = builder.build();
-        }
-
-        applySurfaceParams(params.getSyncTransactionApplier(), surfaceParams);
+    @Override
+    public void onBuildTargetParams(
+            Builder builder, RemoteAnimationTargetCompat app, TransformParams params) {
+        builder.withMatrix(mMatrix)
+                .withWindowCrop(mTmpCropRect)
+                .withCornerRadius(getCurrentCornerRadius());
     }
 
     /**
@@ -289,4 +298,5 @@ public class TaskViewSimulator {
         // Ideally we should use square-root. This is an optimization as one of the dimension is 0.
         return Math.max(Math.abs(mTempPoint[0]), Math.abs(mTempPoint[1]));
     }
+
 }

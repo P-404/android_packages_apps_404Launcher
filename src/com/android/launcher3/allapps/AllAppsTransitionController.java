@@ -1,12 +1,13 @@
 package com.android.launcher3.allapps;
 
-import static com.android.launcher3.LauncherState.ALL_APPS;
 import static com.android.launcher3.LauncherState.ALL_APPS_CONTENT;
 import static com.android.launcher3.LauncherState.ALL_APPS_HEADER_EXTRA;
 import static com.android.launcher3.LauncherState.APPS_VIEW_ITEM_MASK;
 import static com.android.launcher3.LauncherState.OVERVIEW;
 import static com.android.launcher3.LauncherState.VERTICAL_SWIPE_INDICATOR;
 import static com.android.launcher3.anim.Interpolators.FAST_OUT_SLOW_IN;
+import static com.android.launcher3.anim.Interpolators.FINAL_FRAME;
+import static com.android.launcher3.anim.Interpolators.INSTANT;
 import static com.android.launcher3.anim.Interpolators.LINEAR;
 import static com.android.launcher3.anim.PropertySetter.NO_ANIM_PROPERTY_SETTER;
 import static com.android.launcher3.states.StateAnimationConfig.ANIM_ALL_APPS_FADE;
@@ -23,16 +24,17 @@ import android.util.FloatProperty;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.animation.Interpolator;
+import android.widget.EditText;
 
 import com.android.launcher3.DeviceProfile;
 import com.android.launcher3.DeviceProfile.OnDeviceProfileChangeListener;
 import com.android.launcher3.Launcher;
 import com.android.launcher3.LauncherState;
-import com.android.launcher3.LauncherStateManager.StateHandler;
 import com.android.launcher3.R;
 import com.android.launcher3.anim.AnimationSuccessListener;
 import com.android.launcher3.anim.PendingAnimation;
 import com.android.launcher3.anim.PropertySetter;
+import com.android.launcher3.statemanager.StateManager.StateHandler;
 import com.android.launcher3.states.StateAnimationConfig;
 import com.android.launcher3.uioverrides.plugins.PluginManagerWrapper;
 import com.android.launcher3.util.Themes;
@@ -50,8 +52,8 @@ import com.android.systemui.plugins.PluginListener;
  * If release velocity < THRES1, snap according to either top or bottom depending on whether it's
  * closer to top or closer to the page indicator.
  */
-public class AllAppsTransitionController implements StateHandler, OnDeviceProfileChangeListener,
-        PluginListener<AllAppsSearchPlugin> {
+public class AllAppsTransitionController implements StateHandler<LauncherState>,
+        OnDeviceProfileChangeListener, PluginListener<AllAppsSearchPlugin> {
 
     public static final FloatProperty<AllAppsTransitionController> ALL_APPS_PROGRESS =
             new FloatProperty<AllAppsTransitionController>("allAppsProgress") {
@@ -87,6 +89,7 @@ public class AllAppsTransitionController implements StateHandler, OnDeviceProfil
 
     private float mScrollRangeDelta = 0;
 
+    // plugin related variables
     private AllAppsSearchPlugin mPlugin;
     private View mPluginContent;
 
@@ -131,7 +134,6 @@ public class AllAppsTransitionController implements StateHandler, OnDeviceProfil
         float shiftCurrent = progress * mShiftRange;
 
         mAppsView.setTranslationY(shiftCurrent);
-
         if (mPlugin != null) {
             mPlugin.setProgress(progress);
         }
@@ -160,7 +162,6 @@ public class AllAppsTransitionController implements StateHandler, OnDeviceProfil
         setProgress(state.getVerticalProgress(mLauncher));
         setAlphas(state, new StateAnimationConfig(), NO_ANIM_PROPERTY_SETTER);
         onProgressAnimationEnd();
-        updatePlugin(state);
     }
 
     /**
@@ -194,20 +195,6 @@ public class AllAppsTransitionController implements StateHandler, OnDeviceProfil
         builder.add(anim);
 
         setAlphas(toState, config, builder);
-
-        updatePlugin(toState);
-    }
-
-    private void updatePlugin(LauncherState toState) {
-        if (mPlugin == null) return;
-        if (toState == ALL_APPS) {
-            // TODO: change this from toggle event to continuous transition event.
-            mPlugin.setEditText(mAppsView.getSearchUiManager().setTextSearchEnabled(true));
-        } else {
-            mPlugin.setEditText(null);
-            mAppsView.getSearchUiManager().setTextSearchEnabled(false);
-        }
-
     }
 
     public Animator createSpringAnimation(float... progressValues) {
@@ -242,7 +229,9 @@ public class AllAppsTransitionController implements StateHandler, OnDeviceProfil
         setter.setInt(mScrimView, ScrimView.DRAG_HANDLE_ALPHA,
                 (visibleElements & VERTICAL_SWIPE_INDICATOR) != 0 ? 255 : 0, allAppsFade);
 
-        setter.setViewAlpha(mAppsView, hasAnyVisibleItem ? 1 : 0, allAppsFade);
+        // Set visibility of the container at the very beginning or end of the transition.
+        setter.setViewAlpha(mAppsView, hasAnyVisibleItem ? 1 : 0,
+                hasAnyVisibleItem ? INSTANT : FINAL_FRAME);
     }
 
     public AnimatorListenerAdapter getProgressAnimatorListener() {
@@ -276,6 +265,7 @@ public class AllAppsTransitionController implements StateHandler, OnDeviceProfil
         if (Float.compare(mProgress, 1f) == 0) {
             mAppsView.reset(false /* animate */);
         }
+        updatePluginAnimationEnd();
     }
 
     @Override
@@ -285,7 +275,7 @@ public class AllAppsTransitionController implements StateHandler, OnDeviceProfil
                 R.layout.all_apps_content_layout, mAppsView, false);
         mAppsView.addView(mPluginContent);
         mPluginContent.setAlpha(0f);
-        mPlugin.setup((ViewGroup) mPluginContent, mLauncher);
+        mPlugin.setup((ViewGroup) mPluginContent, mLauncher, mShiftRange);
     }
 
     @Override
@@ -296,5 +286,26 @@ public class AllAppsTransitionController implements StateHandler, OnDeviceProfil
 
     public void onActivityDestroyed() {
         PluginManagerWrapper.INSTANCE.get(mLauncher).removePluginListener(this);
+    }
+
+    /** Used for the plugin to signal when drag starts happens
+     * @param toAllApps*/
+    public void onDragStart(boolean toAllApps) {
+        if (mPlugin == null) return;
+
+        if (toAllApps) {
+            EditText editText = mAppsView.getSearchUiManager().setTextSearchEnabled(true);
+            mPlugin.setEditText(editText);
+        }
+        mPlugin.onDragStart(toAllApps ? 1f : 0f);
+    }
+
+    private void updatePluginAnimationEnd() {
+        if (mPlugin == null) return;
+        mPlugin.onAnimationEnd(mProgress);
+        if (Float.compare(mProgress, 1f) == 0) {
+            mAppsView.getSearchUiManager().setTextSearchEnabled(false);
+            mPlugin.setEditText(null);
+        }
     }
 }

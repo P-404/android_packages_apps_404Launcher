@@ -31,9 +31,10 @@ import android.view.MotionEvent;
 import com.android.launcher3.AbstractFloatingView;
 import com.android.launcher3.Launcher;
 import com.android.launcher3.LauncherState;
-import com.android.launcher3.LauncherStateManager.StateListener;
 import com.android.launcher3.R;
 import com.android.launcher3.Utilities;
+import com.android.launcher3.statemanager.StateManager.StateListener;
+import com.android.launcher3.touch.PagedOrientationHandler;
 import com.android.launcher3.util.OnboardingPrefs;
 
 /**
@@ -46,7 +47,7 @@ public class DiscoveryBounce extends AbstractFloatingView {
     private final Launcher mLauncher;
     private final Animator mDiscoBounceAnimation;
 
-    private final StateListener mStateListener = new StateListener() {
+    private final StateListener<LauncherState> mStateListener = new StateListener<LauncherState>() {
         @Override
         public void onStateTransitionStart(LauncherState toState) {
             handleClose(false);
@@ -153,16 +154,19 @@ public class DiscoveryBounce extends AbstractFloatingView {
         new DiscoveryBounce(launcher, 0).show(HOTSEAT);
     }
 
-    public static void showForOverviewIfNeeded(Launcher launcher) {
-        showForOverviewIfNeeded(launcher, true);
+    public static void showForOverviewIfNeeded(Launcher launcher,
+                                               PagedOrientationHandler orientationHandler) {
+        showForOverviewIfNeeded(launcher, true, orientationHandler);
     }
 
-    private static void showForOverviewIfNeeded(Launcher launcher, boolean withDelay) {
+    private static void showForOverviewIfNeeded(Launcher launcher, boolean withDelay,
+                                                PagedOrientationHandler orientationHandler) {
         OnboardingPrefs onboardingPrefs = launcher.getOnboardingPrefs();
         if (!launcher.isInState(OVERVIEW)
                 || !launcher.hasBeenResumed()
                 || launcher.isForceInvisible()
                 || launcher.getDeviceProfile().isVerticalBarLayout()
+                || !orientationHandler.isLayoutNaturalToLauncher()
                 || onboardingPrefs.getBoolean(OnboardingPrefs.SHELF_BOUNCE_SEEN)
                 || launcher.getSystemService(UserManager.class).isDemoUser()
                 || Utilities.IS_RUNNING_IN_TEST_HARNESS) {
@@ -170,7 +174,8 @@ public class DiscoveryBounce extends AbstractFloatingView {
         }
 
         if (withDelay) {
-            new Handler().postDelayed(() -> showForOverviewIfNeeded(launcher, false), DELAY_MS);
+            new Handler().postDelayed(() -> showForOverviewIfNeeded(launcher, false,
+                    orientationHandler), DELAY_MS);
             return;
         } else if (AbstractFloatingView.getTopOpenView(launcher) != null) {
             // TODO: Move these checks to the top and call this method after invalidate handler.

@@ -57,7 +57,7 @@ public class RecentsAnimationController {
     private boolean mUseLauncherSysBarFlags = false;
     private boolean mSplitScreenMinimized = false;
     private boolean mTouchInProgress;
-    private boolean mFinishPending;
+    private boolean mDisableInputProxyPending;
 
     public RecentsAnimationController(RecentsAnimationControllerCompat controller,
             boolean allowMinimizeSplitScreen,
@@ -136,12 +136,12 @@ public class RecentsAnimationController {
 
     @UiThread
     public void finishAnimationToHome() {
-        finishAndClear(true /* toRecents */, null, false /* sendUserLeaveHint */);
+        finishAndDisableInputProxy(true /* toRecents */, null, false /* sendUserLeaveHint */);
     }
 
     @UiThread
     public void finishAnimationToApp() {
-        finishAndClear(false /* toRecents */, null, false /* sendUserLeaveHint */);
+        finishAndDisableInputProxy(false /* toRecents */, null, false /* sendUserLeaveHint */);
     }
 
     /** See {@link #finish(boolean, Runnable, boolean)} */
@@ -160,22 +160,16 @@ public class RecentsAnimationController {
     @UiThread
     public void finish(boolean toRecents, Runnable onFinishComplete, boolean sendUserLeaveHint) {
         Preconditions.assertUIThread();
-        if (!toRecents) {
-            finishAndClear(false, onFinishComplete, sendUserLeaveHint);
+        if (toRecents && mTouchInProgress) {
+            // Finish the controller as requested, but don't disable input proxy yet.
+            mDisableInputProxyPending = true;
+            finishController(toRecents, onFinishComplete, sendUserLeaveHint);
         } else {
-            if (mTouchInProgress) {
-                mFinishPending = true;
-                // Execute the callback
-                if (onFinishComplete != null) {
-                    onFinishComplete.run();
-                }
-            } else {
-                finishAndClear(true, onFinishComplete, sendUserLeaveHint);
-            }
+            finishAndDisableInputProxy(toRecents, onFinishComplete, sendUserLeaveHint);
         }
     }
 
-    private void finishAndClear(boolean toRecents, Runnable onFinishComplete,
+    private void finishAndDisableInputProxy(boolean toRecents, Runnable onFinishComplete,
             boolean sendUserLeaveHint) {
         disableInputProxy();
         finishController(toRecents, onFinishComplete, sendUserLeaveHint);
@@ -263,9 +257,9 @@ public class RecentsAnimationController {
         } else if (action == ACTION_CANCEL || action == ACTION_UP) {
             // Finish any pending actions
             mTouchInProgress = false;
-            if (mFinishPending) {
-                mFinishPending = false;
-                finishAndClear(true /* toRecents */, null, false /* sendUserLeaveHint */);
+            if (mDisableInputProxyPending) {
+                mDisableInputProxyPending = false;
+                disableInputProxy();
             }
         }
         if (mInputConsumer != null) {

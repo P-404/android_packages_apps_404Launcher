@@ -31,6 +31,7 @@ import android.animation.AnimatorListenerAdapter;
 import android.animation.AnimatorSet;
 import android.animation.ValueAnimator;
 import android.os.SystemClock;
+import android.util.Log;
 import android.view.HapticFeedbackConstants;
 import android.view.MotionEvent;
 
@@ -43,6 +44,7 @@ import com.android.launcher3.anim.AnimatorPlaybackController;
 import com.android.launcher3.anim.PendingAnimation;
 import com.android.launcher3.states.StateAnimationConfig;
 import com.android.launcher3.states.StateAnimationConfig.AnimationFlags;
+import com.android.launcher3.testing.TestProtocol;
 import com.android.launcher3.userevent.nano.LauncherLogProto;
 import com.android.launcher3.userevent.nano.LauncherLogProto.Action.Direction;
 import com.android.launcher3.userevent.nano.LauncherLogProto.Action.Touch;
@@ -162,6 +164,9 @@ public abstract class AbstractStateChangeTouchController
 
     @Override
     public final boolean onControllerTouchEvent(MotionEvent ev) {
+        if (TestProtocol.sDebugTracing) {
+            Log.d(TestProtocol.PAUSE_NOT_DETECTED, "onControllerTouchEvent");
+        }
         return mDetector.onTouchEvent(ev);
     }
 
@@ -194,6 +199,10 @@ public abstract class AbstractStateChangeTouchController
 
         mFromState = newFromState;
         mToState = newToState;
+        if (TestProtocol.sDebugTracing) {
+            Log.d(TestProtocol.OVERIEW_NOT_ALLAPPS, "reinitCurrentAnimation: "
+                    + newToState.ordinal + " " + getClass().getSimpleName());
+        }
 
         mStartProgress = 0;
         mPassedOverviewAtomicThreshold = false;
@@ -233,6 +242,7 @@ public abstract class AbstractStateChangeTouchController
     public void onDragStart(boolean start, float startDisplacement) {
         mStartState = mLauncher.getStateManager().getState();
         mIsLogContainerSet = false;
+
         if (mCurrentAnimation == null) {
             mFromState = mStartState;
             mToState = null;
@@ -250,6 +260,10 @@ public abstract class AbstractStateChangeTouchController
         }
         mCanBlockFling = mFromState == NORMAL;
         mFlingBlockCheck.unblockFling();
+        // Must be called after all the animation controllers have been paused
+        if (mToState == ALL_APPS || mToState == NORMAL) {
+            mLauncher.getAllAppsController().onDragStart(mToState == ALL_APPS);
+        }
     }
 
     @Override

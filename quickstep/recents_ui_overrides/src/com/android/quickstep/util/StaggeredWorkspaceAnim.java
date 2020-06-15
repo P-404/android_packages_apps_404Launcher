@@ -32,6 +32,7 @@ import android.animation.ValueAnimator;
 import android.view.View;
 import android.view.ViewGroup;
 
+import com.android.launcher3.BaseQuickstepLauncher;
 import com.android.launcher3.CellLayout;
 import com.android.launcher3.DeviceProfile;
 import com.android.launcher3.Launcher;
@@ -42,6 +43,7 @@ import com.android.launcher3.Workspace;
 import com.android.launcher3.anim.PendingAnimation;
 import com.android.launcher3.anim.SpringAnimationBuilder;
 import com.android.launcher3.graphics.OverviewScrim;
+import com.android.launcher3.statehandlers.DepthController;
 import com.android.launcher3.states.StateAnimationConfig;
 import com.android.launcher3.util.DynamicResource;
 import com.android.quickstep.views.RecentsView;
@@ -119,14 +121,19 @@ public class StaggeredWorkspaceAnim {
                 addStaggeredAnimationForView(child, grid.inv.numRows + 1, totalRows);
             }
 
-            View qsb = launcher.findViewById(R.id.search_container_all_apps);
-            addStaggeredAnimationForView(qsb, grid.inv.numRows + 2, totalRows);
+            if (launcher.getAppsView().getSearchUiManager()
+                    .isQsbVisible(NORMAL.getVisibleElements(launcher))) {
+                addStaggeredAnimationForView(launcher.getAppsView().getSearchView(),
+                        grid.inv.numRows + 2, totalRows);
+            }
         }
 
         if (animateOverviewScrim) {
             addScrimAnimationForState(launcher, BACKGROUND_APP, 0);
             addScrimAnimationForState(launcher, NORMAL, ALPHA_DURATION_MS);
         }
+
+        addDepthAnimationForState(launcher, NORMAL, ALPHA_DURATION_MS);
 
         mAnimators.play(launcher.getDragLayer().getScrim().createSysuiMultiplierAnim(0f, 1f)
                 .setDuration(ALPHA_DURATION_MS));
@@ -212,12 +219,23 @@ public class StaggeredWorkspaceAnim {
     }
 
     private void addScrimAnimationForState(Launcher launcher, LauncherState state, long duration) {
-        PendingAnimation builder = new PendingAnimation(duration, mAnimators);
+        PendingAnimation builder = new PendingAnimation(duration);
         launcher.getWorkspace().getStateTransitionAnimation().setScrim(builder, state);
         builder.setFloat(
                 launcher.getDragLayer().getOverviewScrim(),
                 OverviewScrim.SCRIM_PROGRESS,
                 state.getOverviewScrimAlpha(launcher),
                 ACCEL_DEACCEL);
+        mAnimators.play(builder.buildAnim());
+    }
+
+    private void addDepthAnimationForState(Launcher launcher, LauncherState state, long duration) {
+        if (!(launcher instanceof BaseQuickstepLauncher)) {
+            return;
+        }
+        PendingAnimation builder = new PendingAnimation(duration);
+        DepthController depthController = ((BaseQuickstepLauncher) launcher).getDepthController();
+        depthController.setStateWithAnimation(state, new StateAnimationConfig(), builder);
+        mAnimators.play(builder.buildAnim());
     }
 }

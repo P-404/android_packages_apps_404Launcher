@@ -30,7 +30,8 @@ import static com.android.launcher3.anim.Interpolators.FAST_OUT_SLOW_IN;
 import static com.android.launcher3.anim.Interpolators.LINEAR;
 import static com.android.launcher3.anim.Interpolators.TOUCH_RESPONSE_INTERPOLATOR;
 import static com.android.launcher3.config.FeatureFlags.ENABLE_QUICKSTEP_LIVE_TILE;
-import static com.android.launcher3.logging.StatsLogManager.LauncherEvent.TASK_LAUNCH_TAP;
+import static com.android.launcher3.logging.StatsLogManager.LauncherEvent.LAUNCHER_TASK_ICON_TAP_OR_LONGPRESS;
+import static com.android.launcher3.logging.StatsLogManager.LauncherEvent.LAUNCHER_TASK_LAUNCH_TAP;
 
 import android.animation.Animator;
 import android.animation.AnimatorListenerAdapter;
@@ -212,7 +213,7 @@ public class TaskView extends FrameLayout implements PageCallbacks, Reusable {
             mActivity.getUserEventDispatcher().logTaskLaunchOrDismiss(
                     Touch.TAP, Direction.NONE, getRecentsView().indexOfChild(this),
                     TaskUtils.getLaunchComponentKeyForTask(getTask().key));
-            mActivity.getStatsLogManager().log(TASK_LAUNCH_TAP, buildProto());
+            mActivity.getStatsLogManager().log(LAUNCHER_TASK_LAUNCH_TAP, buildProto());
         });
 
         mCurrentFullscreenParams = new FullscreenDrawParams(context);
@@ -222,8 +223,8 @@ public class TaskView extends FrameLayout implements PageCallbacks, Reusable {
         setOutlineProvider(mOutlineProvider);
     }
 
-    /* Builds proto for logging */
-    protected LauncherAtom.ItemInfo buildProto() {
+    /** Builds proto for logging */
+    public LauncherAtom.ItemInfo buildProto() {
         ComponentKey componentKey = TaskUtils.getLaunchComponentKeyForTask(getTask().key);
         LauncherAtom.ItemInfo.Builder itemBuilder = LauncherAtom.ItemInfo.newBuilder();
         itemBuilder.setIsWork(componentKey.user != Process.myUserHandle());
@@ -424,6 +425,7 @@ public class TaskView extends FrameLayout implements PageCallbacks, Reusable {
     private boolean showTaskMenu(int action) {
         getRecentsView().snapToPage(getRecentsView().indexOfChild(this));
         mMenuView = TaskMenuView.showForTask(this);
+        mActivity.getStatsLogManager().log(LAUNCHER_TASK_ICON_TAP_OR_LONGPRESS, buildProto());
         UserEventDispatcher.newInstance(getContext()).logActionOnItem(action, Direction.NONE,
                 LauncherLogProto.ItemType.TASK_ICON);
         if (mMenuView != null) {
@@ -449,13 +451,13 @@ public class TaskView extends FrameLayout implements PageCallbacks, Reusable {
 
     public void setOrientationState(RecentsOrientedState orientationState) {
         PagedOrientationHandler orientationHandler = orientationState.getOrientationHandler();
-        boolean isRtl = orientationHandler.getRecentsRtlSetting(getResources());
+        boolean isRtl = getLayoutDirection() == LAYOUT_DIRECTION_RTL;
         LayoutParams snapshotParams = (LayoutParams) mSnapshotView.getLayoutParams();
         int thumbnailPadding = (int) getResources().getDimension(R.dimen.task_thumbnail_top_margin);
         LayoutParams iconParams = (LayoutParams) mIconView.getLayoutParams();
         switch (orientationHandler.getRotation()) {
             case Surface.ROTATION_90:
-                iconParams.gravity = (isRtl ? END : START) | CENTER_VERTICAL;
+                iconParams.gravity = (isRtl ? START : END) | CENTER_VERTICAL;
                 iconParams.rightMargin = -thumbnailPadding;
                 iconParams.leftMargin = 0;
                 iconParams.topMargin = snapshotParams.topMargin / 2;

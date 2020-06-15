@@ -90,7 +90,7 @@ public class TaskThumbnailView extends View implements PluginListener<OverviewSc
 
     // Contains the portion of the thumbnail that is clipped when fullscreen progress = 0.
     private final Rect mPreviewRect = new Rect();
-    private final PreviewPositionHelper mPreviewPositionHelper;
+    private final PreviewPositionHelper mPreviewPositionHelper = new PreviewPositionHelper();
     // Initialize with dummy value. It is overridden later by TaskView
     private TaskView.FullscreenDrawParams mFullscreenParams = TEMP_PARAMS;
 
@@ -122,7 +122,6 @@ public class TaskThumbnailView extends View implements PluginListener<OverviewSc
         mDimmingPaintAfterClearing.setColor(Color.BLACK);
         mActivity = BaseActivity.fromContext(context);
         mIsDarkTextTheme = Themes.getAttrBoolean(mActivity, R.attr.isWorkspaceDarkText);
-        mPreviewPositionHelper = new PreviewPositionHelper(context);
     }
 
     /**
@@ -349,8 +348,11 @@ public class TaskThumbnailView extends View implements PluginListener<OverviewSc
         if (mBitmapShader != null && mThumbnailData != null) {
             mPreviewRect.set(0, 0, mThumbnailData.thumbnail.getWidth(),
                     mThumbnailData.thumbnail.getHeight());
+            int currentRotation = ConfigurationCompat.getWindowConfigurationRotation(
+                    mActivity.getResources().getConfiguration());
             mPreviewPositionHelper.updateThumbnailMatrix(mPreviewRect, mThumbnailData,
-                    getMeasuredWidth(), getMeasuredHeight(), mActivity.getDeviceProfile());
+                    getMeasuredWidth(), getMeasuredHeight(), mActivity.getDeviceProfile(),
+                    currentRotation);
 
             mBitmapShader.setLocalMatrix(mPreviewPositionHelper.mMatrix);
             mPaint.setShader(mBitmapShader);
@@ -417,17 +419,6 @@ public class TaskThumbnailView extends View implements PluginListener<OverviewSc
         private float mClipBottom = -1;
         private boolean mIsOrientationChanged;
 
-        private final Context mContext;
-
-        public PreviewPositionHelper(Context context) {
-            mContext = context;
-        }
-
-        public int getCurrentRotation() {
-            return ConfigurationCompat.getWindowConfigurationRotation(
-                    mContext.getResources().getConfiguration());
-        }
-
         public Matrix getMatrix() {
             return mMatrix;
         }
@@ -436,7 +427,7 @@ public class TaskThumbnailView extends View implements PluginListener<OverviewSc
          * Updates the matrix based on the provided parameters
          */
         public void updateThumbnailMatrix(Rect thumbnailPosition, ThumbnailData thumbnailData,
-                int canvasWidth, int canvasHeight, DeviceProfile dp) {
+                int canvasWidth, int canvasHeight, DeviceProfile dp, int currentRotation) {
             boolean isRotated = false;
             boolean isOrientationDifferent;
             mClipBottom = -1;
@@ -451,10 +442,8 @@ public class TaskThumbnailView extends View implements PluginListener<OverviewSc
 
             final float thumbnailScale;
             int thumbnailRotation = thumbnailData.rotation;
-            int currentRotation = getCurrentRotation();
             int deltaRotate = getRotationDelta(currentRotation, thumbnailRotation);
 
-            Rect deviceInsets = dp.getInsets();
             // Landscape vs portrait change
             boolean windowingModeSupportsRotation = !dp.isMultiWindowMode
                     && thumbnailData.windowingMode == WINDOWING_MODE_FULLSCREEN;
@@ -473,16 +462,22 @@ public class TaskThumbnailView extends View implements PluginListener<OverviewSc
                         : canvasWidth / thumbnailWidth;
             }
 
+            Rect splitScreenInsets = dp.getInsets();
             if (!isRotated) {
                 // No Rotation
-                mClippedInsets.offsetTo(deviceInsets.left * scale, deviceInsets.top * scale);
+                if (dp.isMultiWindowMode) {
+                    mClippedInsets.offsetTo(splitScreenInsets.left * scale,
+                            splitScreenInsets.top * scale);
+                } else {
+                    mClippedInsets.offsetTo(thumbnailInsets.left * scale,
+                            thumbnailInsets.top * scale);
+                }
                 mMatrix.setTranslate(
                         -thumbnailInsets.left * scale,
                         -thumbnailInsets.top * scale);
             } else {
                 setThumbnailRotation(deltaRotate, thumbnailInsets, scale, thumbnailPosition);
             }
-            mMatrix.postTranslate(-thumbnailPosition.left, -thumbnailPosition.top);
 
             final float widthWithInsets;
             final float heightWithInsets;
@@ -497,8 +492,8 @@ public class TaskThumbnailView extends View implements PluginListener<OverviewSc
             mClippedInsets.top *= thumbnailScale;
 
             if (dp.isMultiWindowMode) {
-                mClippedInsets.right = deviceInsets.right * scale * thumbnailScale;
-                mClippedInsets.bottom = deviceInsets.bottom * scale * thumbnailScale;
+                mClippedInsets.right = splitScreenInsets.right * scale * thumbnailScale;
+                mClippedInsets.bottom = splitScreenInsets.bottom * scale * thumbnailScale;
             } else {
                 mClippedInsets.right = Math.max(0,
                         widthWithInsets - mClippedInsets.left - canvasWidth);

@@ -18,7 +18,10 @@ package com.android.quickstep.interaction;
 import static com.android.quickstep.interaction.TutorialController.TutorialType.BACK_NAVIGATION_COMPLETE;
 import static com.android.quickstep.interaction.TutorialController.TutorialType.LEFT_EDGE_BACK_NAVIGATION;
 
+import android.graphics.PointF;
 import android.view.View;
+
+import androidx.annotation.Nullable;
 
 import com.android.launcher3.R;
 import com.android.quickstep.interaction.EdgeBackGestureHandler.BackGestureResult;
@@ -29,14 +32,6 @@ final class BackGestureTutorialController extends TutorialController {
 
     BackGestureTutorialController(BackGestureTutorialFragment fragment, TutorialType tutorialType) {
         super(fragment, tutorialType);
-    }
-
-    @Override
-    void transitToController() {
-        super.transitToController();
-        if (mTutorialType != BACK_NAVIGATION_COMPLETE) {
-            showHandCoachingAnimation();
-        }
     }
 
     @Override
@@ -68,7 +63,7 @@ final class BackGestureTutorialController extends TutorialController {
     @Override
     Integer getActionButtonStringId() {
         if (mTutorialType == BACK_NAVIGATION_COMPLETE) {
-            return R.string.gesture_tutorial_action_button_label;
+            return R.string.gesture_tutorial_action_button_label_done;
         }
         return null;
     }
@@ -76,7 +71,7 @@ final class BackGestureTutorialController extends TutorialController {
     @Override
     Integer getActionTextButtonStringId() {
         if (mTutorialType == BACK_NAVIGATION_COMPLETE) {
-            return R.string.gesture_tutorial_action_text_button_label;
+            return R.string.gesture_tutorial_action_button_label_settings;
         }
         return null;
     }
@@ -89,7 +84,6 @@ final class BackGestureTutorialController extends TutorialController {
     @Override
     void onActionTextButtonClicked(View button) {
         mTutorialFragment.startSystemNavigationSetting();
-        mTutorialFragment.closeTutorial();
     }
 
     @Override
@@ -155,11 +149,14 @@ final class BackGestureTutorialController extends TutorialController {
     }
 
     @Override
-    public void onNavBarGestureAttempted(NavBarGestureResult result) {
+    public void onNavBarGestureAttempted(NavBarGestureResult result, PointF finalVelocity) {
         if (mTutorialType == BACK_NAVIGATION_COMPLETE) {
             if (result == NavBarGestureResult.HOME_GESTURE_COMPLETED) {
                 mTutorialFragment.closeTutorial();
             }
         }
     }
+
+    @Override
+    public void setNavBarGestureProgress(@Nullable Float displacement) {}
 }

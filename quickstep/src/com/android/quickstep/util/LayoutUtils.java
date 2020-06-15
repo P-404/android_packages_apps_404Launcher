@@ -17,13 +17,16 @@ package com.android.quickstep.util;
 
 import static com.android.launcher3.config.FeatureFlags.ENABLE_OVERVIEW_ACTIONS;
 import static com.android.quickstep.SysUINavigationMode.removeShelfFromOverview;
-import static com.android.quickstep.util.WindowSizeStrategy.LAUNCHER_ACTIVITY_SIZE_STRATEGY;
 
 import android.content.Context;
 import android.graphics.Rect;
+import android.view.View;
+import android.view.ViewGroup;
 
 import com.android.launcher3.DeviceProfile;
 import com.android.launcher3.R;
+import com.android.launcher3.touch.PagedOrientationHandler;
+import com.android.quickstep.LauncherActivityInterface;
 import com.android.quickstep.SysUINavigationMode;
 
 public class LayoutUtils {
@@ -39,11 +42,13 @@ public class LayoutUtils {
         return swipeHeight;
     }
 
-    public static int getShelfTrackingDistance(Context context, DeviceProfile dp) {
+    public static int getShelfTrackingDistance(Context context, DeviceProfile dp,
+            PagedOrientationHandler orientationHandler) {
         // Track the bottom of the window.
         if (ENABLE_OVERVIEW_ACTIONS.get() && removeShelfFromOverview(context)) {
             Rect taskSize = new Rect();
-            LAUNCHER_ACTIVITY_SIZE_STRATEGY.calculateTaskSize(context, dp, taskSize);
+            LauncherActivityInterface.INSTANCE.calculateTaskSize(context, dp, taskSize,
+                    orientationHandler);
             return (dp.heightPx - taskSize.height()) / 2;
         }
         int shelfHeight = dp.hotseatBarSizePx + dp.getInsets().bottom;
@@ -64,6 +69,23 @@ public class LayoutUtils {
             return srcWidth / targetWidth;
         } else {
             return srcHeight / targetHeight;
+        }
+    }
+
+    /**
+     * Recursively sets view and all children enabled/disabled.
+     * @param viewGroup Top most parent view to change.
+     * @param enabled True = enable, False = disable.
+     */
+    public static void setViewEnabled(ViewGroup viewGroup, boolean enabled) {
+        viewGroup.setEnabled(enabled);
+        for (int i = 0; i < viewGroup.getChildCount(); i++) {
+            View child = viewGroup.getChildAt(i);
+            if (child instanceof ViewGroup) {
+                setViewEnabled((ViewGroup) child, enabled);
+            } else {
+                child.setEnabled(enabled);
+            }
         }
     }
 }

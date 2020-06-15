@@ -15,27 +15,22 @@
  */
 package com.android.quickstep;
 
-import static com.android.launcher3.anim.Interpolators.LINEAR;
 import static com.android.quickstep.SysUINavigationMode.Mode.NO_BUTTON;
-import static com.android.quickstep.fallback.FallbackRecentsView.ZOOM_PROGRESS;
-import static com.android.quickstep.util.WindowSizeStrategy.FALLBACK_RECENTS_SIZE_STRATEGY;
-import static com.android.quickstep.views.RecentsView.CONTENT_ALPHA;
+import static com.android.quickstep.fallback.RecentsState.BACKGROUND_APP;
+import static com.android.quickstep.fallback.RecentsState.DEFAULT;
 
-import android.animation.Animator;
-import android.animation.AnimatorSet;
-import android.animation.ObjectAnimator;
 import android.content.Context;
 import android.graphics.Rect;
-import android.graphics.RectF;
+import android.view.MotionEvent;
 
-import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
 import com.android.launcher3.DeviceProfile;
-import com.android.launcher3.anim.AnimationSuccessListener;
+import com.android.launcher3.R;
 import com.android.launcher3.anim.AnimatorPlaybackController;
+import com.android.launcher3.touch.PagedOrientationHandler;
 import com.android.launcher3.userevent.nano.LauncherLogProto;
-import com.android.quickstep.fallback.FallbackRecentsView;
+import com.android.quickstep.fallback.RecentsState;
 import com.android.quickstep.util.ActivityInitListener;
 import com.android.quickstep.views.RecentsView;
 import com.android.systemui.shared.system.RemoteAnimationTargetCompat;
@@ -48,19 +43,20 @@ import java.util.function.Predicate;
  * currently running one and apps should interact with the {@link RecentsActivity} as opposed
  * to the in-launcher one.
  */
-public final class FallbackActivityInterface implements
-        BaseActivityInterface<RecentsActivity> {
+public final class FallbackActivityInterface extends
+        BaseActivityInterface<RecentsState, RecentsActivity> {
 
-    public FallbackActivityInterface() { }
+    public static final FallbackActivityInterface INSTANCE = new FallbackActivityInterface();
 
-    @Override
-    public void onTransitionCancelled(boolean activityVisible) {
-        // TODO:
+    private FallbackActivityInterface() {
+        super(false, DEFAULT, BACKGROUND_APP);
     }
 
+    /** 2 */
     @Override
-    public int getSwipeUpDestinationAndLength(DeviceProfile dp, Context context, Rect outRect) {
-        FALLBACK_RECENTS_SIZE_STRATEGY.calculateTaskSize(context, dp, outRect);
+    public int getSwipeUpDestinationAndLength(DeviceProfile dp, Context context, Rect outRect,
+            PagedOrientationHandler orientationHandler) {
+        calculateTaskSize(context, dp, outRect, orientationHandler);
         if (dp.isVerticalBarLayout()
                 && SysUINavigationMode.INSTANCE.get(context).getMode() != NO_BUTTON) {
             Rect targetInsets = dp.getInsets();
@@ -71,17 +67,13 @@ public final class FallbackActivityInterface implements
         }
     }
 
+    /** 4 */
     @Override
-    public void onSwipeUpToRecentsComplete() {
-        RecentsActivity activity = getCreatedActivity();
-        if (activity == null) {
-            return;
-        }
-        RecentsView recentsView = activity.getOverviewPanel();
-        recentsView.getClearAllButton().setVisibilityAlpha(1);
-        recentsView.setDisallowScrollToClearAll(false);
+    public void onSwipeUpToHomeComplete(RecentsAnimationDeviceState deviceState) {
+        onSwipeUpToRecentsComplete();
     }
 
+    /** 5 */
     @Override
     public void onAssistantVisibilityChanged(float visibility) {
         // This class becomes active when the screen is locked.
@@ -89,95 +81,13 @@ public final class FallbackActivityInterface implements
         // set to zero prior to this class becoming active.
     }
 
-    @NonNull
+    /** 6 */
     @Override
-    public HomeAnimationFactory prepareHomeUI() {
-        RecentsActivity activity = getCreatedActivity();
-        RecentsView recentsView = activity.getOverviewPanel();
-
-        return new HomeAnimationFactory() {
-            @NonNull
-            @Override
-            public RectF getWindowTargetRect() {
-                float centerX = recentsView.getPivotX();
-                float centerY = recentsView.getPivotY();
-                return new RectF(centerX, centerY, centerX, centerY);
-            }
-
-            @NonNull
-            @Override
-            public AnimatorPlaybackController createActivityAnimationToHome() {
-                Animator anim = ObjectAnimator.ofFloat(recentsView, CONTENT_ALPHA, 0);
-                anim.addListener(new AnimationSuccessListener() {
-                    @Override
-                    public void onAnimationSuccess(Animator animator) {
-                        recentsView.startHome();
-                    }
-                });
-                AnimatorSet animatorSet = new AnimatorSet();
-                animatorSet.play(anim);
-                long accuracy = 2 * Math.max(recentsView.getWidth(), recentsView.getHeight());
-                return AnimatorPlaybackController.wrap(animatorSet, accuracy);
-            }
-        };
-    }
-
-    @Override
-    public AnimationFactory prepareRecentsUI(boolean activityVisible,
-            boolean animateActivity, Consumer<AnimatorPlaybackController> callback) {
-        RecentsActivity activity = getCreatedActivity();
-        if (activityVisible) {
-            return (transitionLength) -> { };
-        }
-
-        FallbackRecentsView rv = activity.getOverviewPanel();
-        rv.setContentAlpha(0);
-        rv.getClearAllButton().setVisibilityAlpha(0);
-        rv.setDisallowScrollToClearAll(true);
-
-        boolean fromState = !animateActivity;
-        rv.setInOverviewState(fromState);
-
-        return new AnimationFactory() {
-
-            boolean isAnimatingToRecents = false;
-
-            @Override
-            public void onRemoteAnimationReceived(RemoteAnimationTargets targets) {
-                isAnimatingToRecents = targets != null && targets.isAnimatingHome();
-                if (!isAnimatingToRecents) {
-                    rv.setContentAlpha(1);
-                }
-                createActivityInterface(getSwipeUpDestinationAndLength(
-                        activity.getDeviceProfile(), activity, new Rect()));
-            }
-
-            @Override
-            public void createActivityInterface(long transitionLength) {
-                AnimatorSet animatorSet = new AnimatorSet();
-                if (isAnimatingToRecents) {
-                    ObjectAnimator anim = ObjectAnimator.ofFloat(rv, CONTENT_ALPHA, 0, 1);
-                    anim.setDuration(transitionLength).setInterpolator(LINEAR);
-                    animatorSet.play(anim);
-                }
-
-                ObjectAnimator anim = ObjectAnimator.ofFloat(rv, ZOOM_PROGRESS, 1, 0);
-                anim.setDuration(transitionLength).setInterpolator(LINEAR);
-                animatorSet.play(anim);
-
-                AnimatorPlaybackController controller =
-                        AnimatorPlaybackController.wrap(animatorSet, transitionLength);
-
-                // Since we are changing the start position of the UI, reapply the state, at the end
-                controller.setEndAction(() -> {
-                    boolean endState = true;
-                    rv.setInOverviewState(controller.getInterpolatedProgress() > 0.5 ?
-                                    endState : fromState);
-                });
-
-                callback.accept(controller);
-            }
-        };
+    public AnimationFactory prepareRecentsUI(
+            boolean activityVisible, Consumer<AnimatorPlaybackController> callback) {
+        DefaultAnimationFactory factory = new DefaultAnimationFactory(callback);
+        factory.initUI();
+        return factory;
     }
 
     @Override
@@ -190,7 +100,7 @@ public final class FallbackActivityInterface implements
     @Nullable
     @Override
     public RecentsActivity getCreatedActivity() {
-        return BaseRecentsActivity.ACTIVITY_TRACKER.getCreatedActivity();
+        return RecentsActivity.ACTIVITY_TRACKER.getCreatedActivity();
     }
 
     @Nullable
@@ -221,6 +131,20 @@ public final class FallbackActivityInterface implements
     }
 
     @Override
+    public boolean deferStartingActivity(RecentsAnimationDeviceState deviceState, MotionEvent ev) {
+        // In non-gesture mode, user might be clicking on the home button which would directly
+        // start the home activity instead of going through recents. In that case, defer starting
+        // recents until we are sure it is a gesture.
+        return !deviceState.isFullyGesturalNavMode()
+                || super.deferStartingActivity(deviceState, ev);
+    }
+
+    @Override
+    public void onExitOverview(RecentsAnimationDeviceState deviceState, Runnable exitRunnable) {
+        // no-op, fake landscape not supported for 3P
+    }
+
+    @Override
     public int getContainerType() {
         RecentsActivity activity = getCreatedActivity();
         boolean visible = activity != null && activity.isStarted() && activity.hasWindowFocus();
@@ -245,11 +169,10 @@ public final class FallbackActivityInterface implements
     }
 
     @Override
-    public void onLaunchTaskSuccess() {
-        RecentsActivity activity = getCreatedActivity();
-        if (activity == null) {
-            return;
-        }
-        activity.onTaskLaunched();
+    protected float getExtraSpace(Context context, DeviceProfile dp,
+            PagedOrientationHandler orientationHandler) {
+        return showOverviewActions(context)
+                ? context.getResources().getDimensionPixelSize(R.dimen.overview_actions_height)
+                : 0;
     }
 }

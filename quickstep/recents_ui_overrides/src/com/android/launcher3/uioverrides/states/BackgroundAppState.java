@@ -17,6 +17,7 @@ package com.android.launcher3.uioverrides.states;
 
 import android.content.Context;
 
+import com.android.launcher3.BaseDraggingActivity;
 import com.android.launcher3.Launcher;
 import com.android.launcher3.allapps.AllAppsTransitionController;
 import com.android.launcher3.userevent.nano.LauncherLogProto;
@@ -44,8 +45,10 @@ public class BackgroundAppState extends OverviewState {
         if (launcher.getDeviceProfile().isVerticalBarLayout()) {
             return super.getVerticalProgress(launcher);
         }
+        RecentsView recentsView = launcher.getOverviewPanel();
         int transitionLength = LayoutUtils.getShelfTrackingDistance(launcher,
-                launcher.getDeviceProfile());
+                launcher.getDeviceProfile(),
+                recentsView.getPagedOrientationHandler());
         AllAppsTransitionController controller = launcher.getAllAppsController();
         float scrollRange = Math.max(controller.getShiftRange(), 1);
         float progressDelta = (transitionLength / scrollRange);
@@ -54,11 +57,7 @@ public class BackgroundAppState extends OverviewState {
 
     @Override
     public float[] getOverviewScaleAndOffset(Launcher launcher) {
-        return new float[] {getOverviewScale(launcher), NO_OFFSET};
-    }
-
-    private float getOverviewScale(Launcher launcher) {
-        return ((RecentsView) launcher.getOverviewPanel()).getMaxScaleForFullScreen();
+        return getOverviewScaleAndOffsetForBackgroundState(launcher);
     }
 
     @Override
@@ -76,9 +75,11 @@ public class BackgroundAppState extends OverviewState {
     public ScaleAndTranslation getHotseatScaleAndTranslation(Launcher launcher) {
         if ((getVisibleElements(launcher) & HOTSEAT_ICONS) != 0) {
             // Translate hotseat offscreen if we show it in overview.
+            RecentsView recentsView = launcher.getOverviewPanel();
             ScaleAndTranslation scaleAndTranslation = super.getHotseatScaleAndTranslation(launcher);
             scaleAndTranslation.translationY += LayoutUtils.getShelfTrackingDistance(launcher,
-                    launcher.getDeviceProfile());
+                    launcher.getDeviceProfile(),
+                    recentsView.getPagedOrientationHandler());
             return scaleAndTranslation;
         }
         return super.getHotseatScaleAndTranslation(launcher);
@@ -87,5 +88,12 @@ public class BackgroundAppState extends OverviewState {
     @Override
     protected float getDepthUnchecked(Context context) {
         return 1f;
+    }
+
+    public static float[] getOverviewScaleAndOffsetForBackgroundState(
+            BaseDraggingActivity activity) {
+        return new float[] {
+                ((RecentsView) activity.getOverviewPanel()).getMaxScaleForFullScreen(),
+                NO_OFFSET};
     }
 }

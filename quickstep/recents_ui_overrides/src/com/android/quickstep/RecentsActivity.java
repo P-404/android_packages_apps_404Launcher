@@ -15,12 +15,15 @@
  */
 package com.android.quickstep;
 
+import static android.content.pm.ActivityInfo.CONFIG_ORIENTATION;
+import static android.content.pm.ActivityInfo.CONFIG_SCREEN_SIZE;
+
 import static com.android.launcher3.QuickstepAppTransitionManagerImpl.RECENTS_LAUNCH_DURATION;
 import static com.android.launcher3.QuickstepAppTransitionManagerImpl.STATUS_BAR_TRANSITION_DURATION;
 import static com.android.launcher3.QuickstepAppTransitionManagerImpl.STATUS_BAR_TRANSITION_PRE_DELAY;
 import static com.android.launcher3.testing.TestProtocol.OVERVIEW_STATE_ORDINAL;
 import static com.android.quickstep.TaskUtils.taskIsATargetWithMode;
-import static com.android.quickstep.TaskViewUtils.getRecentsWindowAnimator;
+import static com.android.quickstep.TaskViewUtils.createRecentsWindowAnimator;
 import static com.android.systemui.shared.system.RemoteAnimationTargetCompat.MODE_CLOSING;
 
 import android.animation.Animator;
@@ -29,48 +32,71 @@ import android.animation.AnimatorSet;
 import android.app.ActivityOptions;
 import android.content.Intent;
 import android.content.res.Configuration;
+import android.os.Bundle;
 import android.os.Handler;
-import android.os.IBinder;
 import android.os.Looper;
 import android.view.View;
 
+import com.android.launcher3.AbstractFloatingView;
 import com.android.launcher3.DeviceProfile;
 import com.android.launcher3.InvariantDeviceProfile;
 import com.android.launcher3.LauncherAnimationRunner;
 import com.android.launcher3.R;
 import com.android.launcher3.anim.Interpolators;
+import com.android.launcher3.anim.PendingAnimation;
 import com.android.launcher3.compat.AccessibilityManagerCompat;
-import com.android.launcher3.util.ObjectWrapper;
+import com.android.launcher3.statemanager.StateManager;
+import com.android.launcher3.statemanager.StateManager.AtomicAnimationFactory;
+import com.android.launcher3.statemanager.StateManager.StateHandler;
+import com.android.launcher3.statemanager.StatefulActivity;
+import com.android.launcher3.util.ActivityTracker;
+import com.android.launcher3.util.SystemUiController;
+import com.android.launcher3.util.Themes;
 import com.android.launcher3.views.BaseDragLayer;
+import com.android.quickstep.fallback.FallbackRecentsStateController;
 import com.android.quickstep.fallback.FallbackRecentsView;
 import com.android.quickstep.fallback.RecentsRootView;
+import com.android.quickstep.fallback.RecentsState;
+import com.android.quickstep.util.RecentsAtomicAnimationFactory;
+import com.android.quickstep.views.OverviewActionsView;
 import com.android.quickstep.views.TaskView;
-import com.android.systemui.shared.recents.model.ThumbnailData;
 import com.android.systemui.shared.system.ActivityOptionsCompat;
 import com.android.systemui.shared.system.RemoteAnimationAdapterCompat;
 import com.android.systemui.shared.system.RemoteAnimationRunnerCompat;
 import com.android.systemui.shared.system.RemoteAnimationTargetCompat;
 
+import java.io.FileDescriptor;
+import java.io.PrintWriter;
+
 /**
  * A recents activity that shows the recently launched tasks as swipable task cards.
  * See {@link com.android.quickstep.views.RecentsView}.
  */
-public final class RecentsActivity extends BaseRecentsActivity {
+public final class RecentsActivity extends StatefulActivity<RecentsState> {
 
-    public static final String EXTRA_THUMBNAIL = "thumbnailData";
-    public static final String EXTRA_TASK_ID = "taskID";
+    public static final ActivityTracker<RecentsActivity> ACTIVITY_TRACKER =
+            new ActivityTracker<>();
 
     private Handler mUiHandler = new Handler(Looper.getMainLooper());
     private RecentsRootView mRecentsRootView;
     private FallbackRecentsView mFallbackRecentsView;
+    private OverviewActionsView mActionsView;
 
-    @Override
+    private Configuration mOldConfig;
+
+    private StateManager<RecentsState> mStateManager;
+
+    /**
+     * Init drag layer and overview panel views.
+     */
     protected void initViews() {
         setContentView(R.layout.fallback_recents_activity);
         mRecentsRootView = findViewById(R.id.drag_layer);
         mFallbackRecentsView = findViewById(R.id.overview_panel);
+        mActionsView = findViewById(R.id.overview_actions_view);
+
         mRecentsRootView.recreateControllers();
-        mFallbackRecentsView.init(findViewById(R.id.overview_actions_view));
+        mFallbackRecentsView.init(mActionsView);
     }
 
     @Override
@@ -87,41 +113,39 @@ public final class RecentsActivity extends BaseRecentsActivity {
 
     @Override
     protected void onNewIntent(Intent intent) {
-        if (intent.getExtras() != null) {
-            int taskID = intent.getIntExtra(EXTRA_TASK_ID, 0);
-            IBinder thumbnail = intent.getExtras().getBinder(EXTRA_THUMBNAIL);
-            if (taskID != 0 && thumbnail instanceof ObjectWrapper) {
-                ObjectWrapper<ThumbnailData> obj = (ObjectWrapper<ThumbnailData>) thumbnail;
-                ThumbnailData thumbnailData = obj.get();
-                mFallbackRecentsView.showCurrentTask(taskID);
-                mFallbackRecentsView.updateThumbnail(taskID, thumbnailData);
-                // Clear the ref since any reference to the extras on the system side will still
-                // hold a reference to the wrapper
-                obj.clear();
-            }
-        }
-        intent.removeExtra(EXTRA_TASK_ID);
-        intent.removeExtra(EXTRA_THUMBNAIL);
         super.onNewIntent(intent);
+        ACTIVITY_TRACKER.handleNewIntent(this, intent);
     }
 
-    @Override
+    /**
+         * Logic for when device configuration changes (rotation, screen size change, multi-window,
+         * etc.)
+         */
     protected void onHandleConfigChanged() {
-        super.onHandleConfigChanged();
+        mUserEventDispatcher = null;
+        initDeviceProfile();
+
+        AbstractFloatingView.closeOpenViews(this, true,
+                AbstractFloatingView.TYPE_ALL & ~AbstractFloatingView.TYPE_REBIND_SAFE);
+        dispatchDeviceProfileChanged();
+
+        reapplyUi();
         mRecentsRootView.recreateControllers();
     }
 
-    @Override
-    protected void reapplyUi() {
-        mRecentsRootView.dispatchInsets();
-    }
-
-    @Override
+    /**
+     * Generate the device profile to use in this activity.
+     * @return device profile
+     */
     protected DeviceProfile createDeviceProfile() {
         DeviceProfile dp = InvariantDeviceProfile.INSTANCE.get(this).getDeviceProfile(this);
+        DeviceProfile dp1 = InvariantDeviceProfile.INSTANCE.get(this).getDeviceProfile(this);
+
+        // In case we are reusing IDP, create a copy so that we don't conflict with Launcher
+        // activity.
         return (mRecentsRootView != null) && isInMultiWindowMode()
                 ? dp.getMultiWindowProfile(this, getMultiWindowDisplaySize())
-                : super.createDeviceProfile();
+                : dp1.copy(this);
     }
 
     @Override
@@ -137,6 +161,10 @@ public final class RecentsActivity extends BaseRecentsActivity {
     @Override
     public <T extends View> T getOverviewPanel() {
         return (T) mFallbackRecentsView;
+    }
+
+    public OverviewActionsView getActionsView() {
+        return mActionsView;
     }
 
     @Override
@@ -160,12 +188,7 @@ public final class RecentsActivity extends BaseRecentsActivity {
                     RemoteAnimationTargetCompat[] wallpaperTargets, AnimationResult result) {
                 AnimatorSet anim = composeRecentsLaunchAnimator(taskView, appTargets,
                         wallpaperTargets);
-                anim.addListener(new AnimatorListenerAdapter() {
-                    @Override
-                    public void onAnimationEnd(Animator animation) {
-                        mFallbackRecentsView.resetViewUI();
-                    }
-                });
+                anim.addListener(resetStateListener());
                 result.setAnimation(anim, RecentsActivity.this);
             }
         };
@@ -183,9 +206,10 @@ public final class RecentsActivity extends BaseRecentsActivity {
             RemoteAnimationTargetCompat[] wallpaperTargets) {
         AnimatorSet target = new AnimatorSet();
         boolean activityClosing = taskIsATargetWithMode(appTargets, getTaskId(), MODE_CLOSING);
-        Animator recentsAnimator = getRecentsWindowAnimator(taskView, !activityClosing, appTargets,
-                wallpaperTargets, null /* depthController */);
-        target.play(recentsAnimator.setDuration(RECENTS_LAUNCH_DURATION));
+        PendingAnimation pa = new PendingAnimation(RECENTS_LAUNCH_DURATION);
+        createRecentsWindowAnimator(taskView, !activityClosing, appTargets,
+                wallpaperTargets, null /* depthController */, pa);
+        target.play(pa.buildAnim());
 
         // Found a visible recents task that matches the opening app, lets launch the app from there
         if (activityClosing) {
@@ -193,12 +217,7 @@ public final class RecentsActivity extends BaseRecentsActivity {
                     .createAdjacentPageAnimForTaskLaunch(taskView);
             adjacentAnimation.setInterpolator(Interpolators.TOUCH_RESPONSE_INTERPOLATOR);
             adjacentAnimation.setDuration(RECENTS_LAUNCH_DURATION);
-            adjacentAnimation.addListener(new AnimatorListenerAdapter() {
-                @Override
-                public void onAnimationEnd(Animator animation) {
-                    mFallbackRecentsView.resetTaskVisuals();
-                }
-            });
+            adjacentAnimation.addListener(resetStateListener());
             target.play(adjacentAnimation);
         }
         return target;
@@ -210,13 +229,14 @@ public final class RecentsActivity extends BaseRecentsActivity {
         // onActivityStart callback.
         mFallbackRecentsView.setContentAlpha(1);
         super.onStart();
-        mFallbackRecentsView.resetTaskVisuals();
     }
 
     @Override
     protected void onStop() {
         super.onStop();
-        mFallbackRecentsView.reset();
+
+        // Workaround for b/78520668, explicitly trim memory once UI is hidden
+        onTrimMemory(TRIM_MEMORY_UI_HIDDEN);
     }
 
     @Override
@@ -225,7 +245,102 @@ public final class RecentsActivity extends BaseRecentsActivity {
         AccessibilityManagerCompat.sendStateEventToTest(getBaseContext(), OVERVIEW_STATE_ORDINAL);
     }
 
-    public void onTaskLaunched() {
-        mFallbackRecentsView.resetTaskVisuals();
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+
+        mStateManager = new StateManager<>(this, RecentsState.DEFAULT);
+
+        mOldConfig = new Configuration(getResources().getConfiguration());
+        initDeviceProfile();
+        initViews();
+
+        getSystemUiController().updateUiState(SystemUiController.UI_STATE_BASE_WINDOW,
+                Themes.getAttrBoolean(this, R.attr.isWorkspaceDarkText));
+        ACTIVITY_TRACKER.handleCreate(this);
+    }
+
+    @Override
+    public void onConfigurationChanged(Configuration newConfig) {
+        int diff = newConfig.diff(mOldConfig);
+        if ((diff & (CONFIG_ORIENTATION | CONFIG_SCREEN_SIZE)) != 0) {
+            onHandleConfigChanged();
+        }
+        mOldConfig.setTo(newConfig);
+        super.onConfigurationChanged(newConfig);
+    }
+
+    /**
+     * Initialize/update the device profile.
+     */
+    private void initDeviceProfile() {
+        mDeviceProfile = createDeviceProfile();
+        onDeviceProfileInitiated();
+    }
+
+    @Override
+    public void onEnterAnimationComplete() {
+        super.onEnterAnimationComplete();
+        // After the transition to home, enable the high-res thumbnail loader if it wasn't enabled
+        // as a part of quickstep, so that high-res thumbnails can load the next time we enter
+        // overview
+        RecentsModel.INSTANCE.get(this).getThumbnailCache()
+                .getHighResLoadingState().setVisible(true);
+    }
+
+    @Override
+    public void onTrimMemory(int level) {
+        super.onTrimMemory(level);
+        RecentsModel.INSTANCE.get(this).onTrimMemory(level);
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        ACTIVITY_TRACKER.onActivityDestroyed(this);
+    }
+
+    @Override
+    public void onBackPressed() {
+        // TODO: Launch the task we came from
+        startHome();
+    }
+
+    public void startHome() {
+        startActivity(new Intent(Intent.ACTION_MAIN)
+                .addCategory(Intent.CATEGORY_HOME)
+                .setFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+    }
+
+    @Override
+    protected StateHandler<RecentsState>[] createStateHandlers() {
+        return new StateHandler[] { new FallbackRecentsStateController(this) };
+    }
+
+    @Override
+    public StateManager<RecentsState> getStateManager() {
+        return mStateManager;
+    }
+
+    @Override
+    public void dump(String prefix, FileDescriptor fd, PrintWriter writer, String[] args) {
+        super.dump(prefix, fd, writer, args);
+        writer.println(prefix + "Misc:");
+        dumpMisc(prefix + "\t", writer);
+    }
+
+    @Override
+    public AtomicAnimationFactory<RecentsState> createAtomicAnimationFactory() {
+        return new RecentsAtomicAnimationFactory<>(this, 0);
+    }
+
+    private AnimatorListenerAdapter resetStateListener() {
+        return new AnimatorListenerAdapter() {
+            @Override
+            public void onAnimationEnd(Animator animation) {
+                mFallbackRecentsView.resetTaskVisuals();
+                mStateManager.reapplyState();
+            }
+        };
     }
 }

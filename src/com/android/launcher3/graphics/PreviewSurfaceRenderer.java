@@ -29,6 +29,7 @@ import android.os.Messenger;
 import android.view.Display;
 import android.view.SurfaceControlViewHost;
 import android.view.View;
+import android.view.animation.AccelerateDecelerateInterpolator;
 
 import com.android.launcher3.InvariantDeviceProfile;
 
@@ -36,6 +37,8 @@ import java.util.concurrent.TimeUnit;
 
 /** Render preview using surface view. */
 public class PreviewSurfaceRenderer implements IBinder.DeathRecipient {
+
+    private static final int FADE_IN_ANIMATION_DURATION = 200;
 
     private static final String KEY_HOST_TOKEN = "host_token";
     private static final String KEY_VIEW_WIDTH = "width";
@@ -78,10 +81,12 @@ public class PreviewSurfaceRenderer implements IBinder.DeathRecipient {
             binderDied();
         }
 
+        SurfaceControlViewHost.SurfacePackage surfacePackage;
         try {
             mSurfaceControlViewHost = MAIN_EXECUTOR
                     .submit(() -> new SurfaceControlViewHost(mContext, mDisplay, mHostToken))
                     .get(5, TimeUnit.SECONDS);
+            surfacePackage = mSurfaceControlViewHost.getSurfacePackage();
             mHostToken.linkToDeath(this, 0);
         } catch (Exception e) {
             e.printStackTrace();
@@ -89,6 +94,14 @@ public class PreviewSurfaceRenderer implements IBinder.DeathRecipient {
         }
 
         MAIN_EXECUTOR.execute(() -> {
+            // If mSurfaceControlViewHost is null due to any reason (e.g. binder died,
+            // happening when user leaves the preview screen before preview rendering finishes),
+            // we should return here.
+            SurfaceControlViewHost host = mSurfaceControlViewHost;
+            if (host == null) {
+                return;
+            }
+
             View view = new LauncherPreviewRenderer(mContext, mIdp).getRenderedView();
             // This aspect scales the view to fit in the surface and centers it
             final float scale = Math.min(mWidth / (float) view.getMeasuredWidth(),
@@ -99,14 +112,19 @@ public class PreviewSurfaceRenderer implements IBinder.DeathRecipient {
             view.setPivotY(0);
             view.setTranslationX((mWidth - scale * view.getWidth()) / 2);
             view.setTranslationY((mHeight - scale * view.getHeight()) / 2);
-            mSurfaceControlViewHost.setView(view, view.getMeasuredWidth(),
+            view.setAlpha(0);
+            view.animate().alpha(1)
+                    .setInterpolator(new AccelerateDecelerateInterpolator())
+                    .setDuration(FADE_IN_ANIMATION_DURATION)
+                    .start();
+            host.setView(view, view.getMeasuredWidth(),
                     view.getMeasuredHeight());
         });
 
         Bundle result = new Bundle();
-        result.putParcelable(KEY_SURFACE_PACKAGE, mSurfaceControlViewHost.getSurfacePackage());
+        result.putParcelable(KEY_SURFACE_PACKAGE, surfacePackage);
 
-        Handler handler = new Handler(Looper.getMainLooper(), Loopermessage -> {
+        Handler handler = new Handler(Looper.getMainLooper(), message -> {
             binderDied();
             return true;
         });
@@ -120,8 +138,10 @@ public class PreviewSurfaceRenderer implements IBinder.DeathRecipient {
     @Override
     public void binderDied() {
         if (mSurfaceControlViewHost != null) {
-            mSurfaceControlViewHost.release();
-            mSurfaceControlViewHost = null;
+            MAIN_EXECUTOR.execute(() -> {
+                mSurfaceControlViewHost.release();
+                mSurfaceControlViewHost = null;
+            });
         }
         mHostToken.unlinkToDeath(this, 0);
     }

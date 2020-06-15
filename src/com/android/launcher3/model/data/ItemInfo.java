@@ -20,10 +20,15 @@ import static com.android.launcher3.LauncherSettings.Favorites.CONTAINER_ALL_APP
 import static com.android.launcher3.LauncherSettings.Favorites.CONTAINER_DESKTOP;
 import static com.android.launcher3.LauncherSettings.Favorites.CONTAINER_HOTSEAT;
 import static com.android.launcher3.LauncherSettings.Favorites.CONTAINER_HOTSEAT_PREDICTION;
+import static com.android.launcher3.LauncherSettings.Favorites.CONTAINER_PREDICTION;
+import static com.android.launcher3.LauncherSettings.Favorites.CONTAINER_SEARCH_RESULTS;
+import static com.android.launcher3.LauncherSettings.Favorites.CONTAINER_SHORTCUTS;
+import static com.android.launcher3.LauncherSettings.Favorites.CONTAINER_WIDGETS_TRAY;
 import static com.android.launcher3.LauncherSettings.Favorites.ITEM_TYPE_APPLICATION;
 import static com.android.launcher3.LauncherSettings.Favorites.ITEM_TYPE_APPWIDGET;
 import static com.android.launcher3.LauncherSettings.Favorites.ITEM_TYPE_DEEP_SHORTCUT;
 import static com.android.launcher3.LauncherSettings.Favorites.ITEM_TYPE_SHORTCUT;
+import static com.android.launcher3.logger.LauncherAtom.ContainerInfo.ContainerCase.CONTAINER_NOT_SET;
 
 import android.content.ComponentName;
 import android.content.ContentValues;
@@ -39,6 +44,9 @@ import com.android.launcher3.Workspace;
 import com.android.launcher3.logger.LauncherAtom;
 import com.android.launcher3.logger.LauncherAtom.AllAppsContainer;
 import com.android.launcher3.logger.LauncherAtom.ContainerInfo;
+import com.android.launcher3.logger.LauncherAtom.PredictionContainer;
+import com.android.launcher3.logger.LauncherAtom.SearchResultContainer;
+import com.android.launcher3.logger.LauncherAtom.ShortcutsContainer;
 import com.android.launcher3.util.ContentWriter;
 
 import java.util.Optional;
@@ -239,8 +247,7 @@ public class ItemInfo {
      * Returns if an Item is a predicted item
      */
     public boolean isPredictedItem() {
-        return container == LauncherSettings.Favorites.CONTAINER_HOTSEAT_PREDICTION
-                || container == LauncherSettings.Favorites.CONTAINER_PREDICTION;
+        return container == CONTAINER_HOTSEAT_PREDICTION || container == CONTAINER_PREDICTION;
     }
 
     /**
@@ -252,9 +259,15 @@ public class ItemInfo {
     /**
      * Creates {@link LauncherAtom.ItemInfo} with important fields and parent container info.
      */
+    public LauncherAtom.ItemInfo buildProto() {
+        return buildProto(null);
+    }
+
+    /**
+     * Creates {@link LauncherAtom.ItemInfo} with important fields and parent container info.
+     */
     public LauncherAtom.ItemInfo buildProto(FolderInfo fInfo) {
-        LauncherAtom.ItemInfo.Builder itemBuilder = LauncherAtom.ItemInfo.newBuilder();
-        itemBuilder.setIsWork(user != Process.myUserHandle());
+        LauncherAtom.ItemInfo.Builder itemBuilder = getDefaultItemInfoBuilder();
         Optional<ComponentName> nullableComponent = Optional.ofNullable(getTargetComponent());
         switch (itemType) {
             case ITEM_TYPE_APPLICATION:
@@ -305,28 +318,71 @@ public class ItemInfo {
             }
             itemBuilder.setContainerInfo(ContainerInfo.newBuilder().setFolder(folderBuilder));
         } else {
-            switch (container) {
-                case CONTAINER_HOTSEAT:
-                case CONTAINER_HOTSEAT_PREDICTION:
-                    itemBuilder.setContainerInfo(
-                            ContainerInfo.newBuilder().setHotseat(
-                                    LauncherAtom.HotseatContainer.newBuilder().setIndex(screenId)));
-                    break;
-                case CONTAINER_DESKTOP:
-                    itemBuilder.setContainerInfo(
-                            ContainerInfo.newBuilder().setWorkspace(
-                                    LauncherAtom.WorkspaceContainer.newBuilder()
-                                            .setGridX(cellX)
-                                            .setGridY(cellY)
-                                            .setPageIndex(screenId)));
-                    break;
-                case CONTAINER_ALL_APPS:
-                    itemBuilder.setContainerInfo(
-                            ContainerInfo.newBuilder().setAllAppsContainer(
-                                    AllAppsContainer.getDefaultInstance()));
-                    break;
+            ContainerInfo containerInfo = getContainerInfo();
+            if (!containerInfo.getContainerCase().equals(CONTAINER_NOT_SET)) {
+                itemBuilder.setContainerInfo(containerInfo);
             }
         }
         return itemBuilder.build();
+    }
+
+    LauncherAtom.ItemInfo.Builder getDefaultItemInfoBuilder() {
+        LauncherAtom.ItemInfo.Builder itemBuilder = LauncherAtom.ItemInfo.newBuilder();
+        itemBuilder.setIsWork(user != Process.myUserHandle());
+        return itemBuilder;
+    }
+
+    ContainerInfo getContainerInfo() {
+        switch (container) {
+            case CONTAINER_HOTSEAT:
+            case CONTAINER_HOTSEAT_PREDICTION:
+                return ContainerInfo.newBuilder()
+                        .setHotseat(LauncherAtom.HotseatContainer.newBuilder().setIndex(screenId))
+                        .build();
+            case CONTAINER_DESKTOP:
+                return ContainerInfo.newBuilder()
+                        .setWorkspace(
+                                LauncherAtom.WorkspaceContainer.newBuilder()
+                                        .setGridX(cellX)
+                                        .setGridY(cellY)
+                                        .setPageIndex(screenId))
+                        .build();
+            case CONTAINER_ALL_APPS:
+                return ContainerInfo.newBuilder()
+                        .setAllAppsContainer(
+                                AllAppsContainer.getDefaultInstance())
+                        .build();
+            case CONTAINER_WIDGETS_TRAY:
+                return ContainerInfo.newBuilder()
+                        .setWidgetsContainer(
+                                LauncherAtom.WidgetsContainer.getDefaultInstance())
+                        .build();
+            case CONTAINER_PREDICTION:
+                return ContainerInfo.newBuilder()
+                        .setPredictionContainer(PredictionContainer.getDefaultInstance())
+                        .build();
+            case CONTAINER_SEARCH_RESULTS:
+                return ContainerInfo.newBuilder()
+                        .setSearchResultContainer(SearchResultContainer.getDefaultInstance())
+                        .build();
+            case CONTAINER_SHORTCUTS:
+                return ContainerInfo.newBuilder()
+                        .setShortcutsContainer(ShortcutsContainer.getDefaultInstance())
+                        .build();
+        }
+        return ContainerInfo.getDefaultInstance();
+    }
+
+    /**
+     * Returns shallow copy of the object.
+     */
+    public ItemInfo makeShallowCopy() {
+        ItemInfo itemInfo = new ItemInfo();
+        itemInfo.copyFrom(this);
+        return itemInfo;
+    }
+
+    public void setTitle(CharSequence title) {
+        this.title = title;
     }
 }

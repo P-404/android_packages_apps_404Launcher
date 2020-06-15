@@ -47,24 +47,27 @@ public class ClearAllButton extends Button implements PageCallbacks {
     private boolean mIsRtl;
 
     private int mScrollOffset;
-    private RecentsView mParent;
 
     public ClearAllButton(Context context, AttributeSet attrs) {
         super(context, attrs);
+        mIsRtl = getLayoutDirection() == LAYOUT_DIRECTION_RTL;
     }
 
     @Override
     protected void onLayout(boolean changed, int left, int top, int right, int bottom) {
         super.onLayout(changed, left, top, right, bottom);
-        PagedOrientationHandler orientationHandler = mParent.getPagedOrientationHandler();
-        mScrollOffset = orientationHandler.getClearAllScrollOffset(mParent, mIsRtl);
+        PagedOrientationHandler orientationHandler = getRecentsView().getPagedOrientationHandler();
+        mScrollOffset = orientationHandler.getClearAllScrollOffset(getRecentsView(), mIsRtl);
+    }
+
+    private RecentsView getRecentsView() {
+        return (RecentsView) getParent();
     }
 
     @Override
-    protected void onAttachedToWindow() {
-        super.onAttachedToWindow();
-        mParent = (RecentsView) getParent();
-        mIsRtl = !mParent.getPagedOrientationHandler().getRecentsRtlSetting(getResources());
+    public void onRtlPropertiesChanged(int layoutDirection) {
+        super.onRtlPropertiesChanged(layoutDirection);
+        mIsRtl = getLayoutDirection() == LAYOUT_DIRECTION_RTL;
     }
 
     @Override
@@ -88,7 +91,7 @@ public class ClearAllButton extends Button implements PageCallbacks {
 
     @Override
     public void onPageScroll(ScrollState scrollState) {
-        PagedOrientationHandler orientationHandler = mParent.getPagedOrientationHandler();
+        PagedOrientationHandler orientationHandler = getRecentsView().getPagedOrientationHandler();
         float orientationSize = orientationHandler.getPrimaryValue(getWidth(), getHeight());
         if (orientationSize == 0) {
             return;

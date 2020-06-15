@@ -13,15 +13,17 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package com.android.launcher3.uioverrides;
 
-import android.content.Context;
-import android.os.Bundle;
+import android.view.LayoutInflater;
+import android.view.View;
+import android.view.ViewGroup;
 
-/** Render preview using surface view. */
-public class PreviewSurfaceRenderer {
+import com.android.launcher3.model.data.WorkspaceItemInfo;
 
-    /** Handle a received surface view request. */
-    public static void render(Context context, Bundle bundle) { }
+/** A util class that inflates a predicted app icon */
+public class PredictedAppIconInflater {
+    public static View inflate(LayoutInflater inflater, ViewGroup parent, WorkspaceItemInfo info) {
+        return null;
+    }
 }

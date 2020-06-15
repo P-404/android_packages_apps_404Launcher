@@ -18,13 +18,14 @@ package com.android.quickstep.inputconsumers;
 import static com.android.launcher3.config.FeatureFlags.ENABLE_QUICKSTEP_LIVE_TILE;
 import static com.android.systemui.shared.system.ActivityManagerWrapper.CLOSE_SYSTEM_WINDOWS_REASON_RECENTS;
 
+import android.util.Log;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
 
 import androidx.annotation.Nullable;
 
-import com.android.launcher3.BaseDraggingActivity;
 import com.android.launcher3.Utilities;
+import com.android.launcher3.statemanager.StatefulActivity;
 import com.android.launcher3.testing.TestLogging;
 import com.android.launcher3.testing.TestProtocol;
 import com.android.launcher3.views.BaseDragLayer;
@@ -40,11 +41,11 @@ import java.util.function.Predicate;
 /**
  * Input consumer for handling touch on the recents/Launcher activity.
  */
-public class OverviewInputConsumer<T extends BaseDraggingActivity>
+public class OverviewInputConsumer<T extends StatefulActivity<?>>
         implements InputConsumer {
 
     private final T mActivity;
-    private final BaseActivityInterface<T> mActivityInterface;
+    private final BaseActivityInterface<?, T> mActivityInterface;
     private final BaseDragLayer mTarget;
     private final InputMonitorCompat mInputMonitor;
 
@@ -95,6 +96,9 @@ public class OverviewInputConsumer<T extends BaseDraggingActivity>
             ev.setEdgeFlags(flags | Utilities.EDGE_NAV_BAR);
         }
         ev.offsetLocation(-mLocationOnScreen[0], -mLocationOnScreen[1]);
+        if (TestProtocol.sDebugTracing) {
+            Log.d(TestProtocol.PAUSE_NOT_DETECTED, "OverviewInputConsumer");
+        }
         boolean handled = mEventReceiver.test(ev);
         ev.offsetLocation(mLocationOnScreen[0], mLocationOnScreen[1]);
         ev.setEdgeFlags(flags);

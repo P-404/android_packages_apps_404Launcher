@@ -15,7 +15,6 @@
  */
 package com.android.quickstep.interaction;
 
-import android.content.ActivityNotFoundException;
 import android.content.Intent;
 import android.graphics.Insets;
 import android.os.Bundle;
@@ -35,16 +34,9 @@ import androidx.fragment.app.FragmentActivity;
 import com.android.launcher3.R;
 import com.android.quickstep.interaction.TutorialController.TutorialType;
 
-import java.net.URISyntaxException;
-
 abstract class TutorialFragment extends Fragment implements OnTouchListener {
 
     private static final String LOG_TAG = "TutorialFragment";
-    private static final String SYSTEM_NAVIGATION_SETTING_INTENT =
-            "#Intent;action=com.android.settings.SEARCH_RESULT_TRAMPOLINE;S"
-                    + ".:settings:fragment_args_key=gesture_system_navigation_input_summary;S"
-                    + ".:settings:show_fragment=com.android.settings.gestures"
-                    + ".SystemNavigationGestureSettings;end";
     static final String KEY_TUTORIAL_TYPE = "tutorial_type";
 
     TutorialType mTutorialType;
@@ -76,6 +68,9 @@ abstract class TutorialFragment extends Fragment implements OnTouchListener {
             case HOME_NAVIGATION:
             case HOME_NAVIGATION_COMPLETE:
                 return new HomeGestureTutorialFragment();
+            case OVERVIEW_NAVIGATION:
+            case OVERVIEW_NAVIGATION_COMPLETE:
+                return new OverviewGestureTutorialFragment();
             default:
                 Log.e(LOG_TAG, "Failed to find an appropriate fragment for " + tutorialType.name());
         }
@@ -182,14 +177,6 @@ abstract class TutorialFragment extends Fragment implements OnTouchListener {
     }
 
     void startSystemNavigationSetting() {
-        try {
-            startActivityForResult(
-                    Intent.parseUri(SYSTEM_NAVIGATION_SETTING_INTENT, /* flags= */ 0),
-                    /* requestCode= */ 0);
-        } catch (URISyntaxException e) {
-            Log.e(LOG_TAG, "The launch Intent Uri is wrong syntax: " + e);
-        } catch (ActivityNotFoundException e) {
-            Log.e(LOG_TAG, "The launch Activity not found: " + e);
-        }
+        startActivity(new Intent("com.android.settings.GESTURE_NAVIGATION_SETTINGS"));
     }
 }
