@@ -39,6 +39,7 @@ import com.android.launcher3.settings.preference.IconPackPrefSetter;
 import com.android.launcher3.settings.preference.ReloadingListPreference;
 import com.android.launcher3.util.AppReloader;
 
+import com.android.launcher3.LauncherAppState;
 import com.android.launcher3.LauncherFiles;
 import com.android.launcher3.R;
 import com.android.launcher3.Utilities;
@@ -50,6 +51,7 @@ import androidx.preference.Preference;
 import androidx.preference.PreferenceFragment;
 import androidx.preference.PreferenceFragment.OnPreferenceStartFragmentCallback;
 import androidx.preference.PreferenceFragment.OnPreferenceStartScreenCallback;
+import androidx.preference.Preference.OnPreferenceChangeListener;
 import androidx.preference.PreferenceGroup.PreferencePositionCallback;
 import androidx.preference.PreferenceScreen;
 import androidx.recyclerview.widget.RecyclerView;
@@ -100,7 +102,11 @@ public class SettingsActivity extends Activity
         Utilities.getPrefs(getApplicationContext()).registerOnSharedPreferenceChangeListener(this);
     }
     @Override
-    public void onSharedPreferenceChanged(SharedPreferences sharedPreferences, String key) { }
+    public void onSharedPreferenceChanged(SharedPreferences sharedPreferences, String key) {
+        if (Utilities.ICON_SIZE.equals(key)) {
+                LauncherAppState.getInstanceNoCreate().setNeedsRestart();
+        }
+    }
 
     public interface OnResumePreferenceCallback {
         void onResume();

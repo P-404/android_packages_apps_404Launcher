@@ -124,6 +124,8 @@ public final class Utilities {
      */
     public static final int EDGE_NAV_BAR = 1 << 8;
 
+    public static final String ICON_SIZE = "pref_icon_size";
+
     /**
      * Indicates if the device has a debug build. Should only be used to store additional info or
      * add extra logging and not for changing the app behavior.
@@ -688,5 +690,31 @@ public final class Utilities {
         public int getIntrinsicWidth() {
             return mSize;
         }
+    }
+
+    public static float getIconSizeModifier(Context context) {
+        String saved = getPrefs(context).getString(ICON_SIZE, "average");
+        float offset;
+        switch (saved) {
+            case "extrasmall":
+                offset = 0.75F;
+                break;
+            case "small":
+                offset = 0.90F;
+                break;
+            case "average":
+                offset = 1.00F;
+                break;
+            case "large":
+                offset = 1.10F;
+                break;
+            case "extralarge":
+                offset = 1.25F;
+                break;
+            default:
+                offset = 1.00F;
+                break;
+        }
+        return offset;
     }
 }
