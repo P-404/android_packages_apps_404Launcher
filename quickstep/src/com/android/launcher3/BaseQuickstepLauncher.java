@@ -31,6 +31,7 @@ import android.os.Bundle;
 import android.os.CancellationSignal;
 
 import com.android.launcher3.config.FeatureFlags;
+import com.android.launcher3.hybridhotseat.HotseatPredictionController;
 import com.android.launcher3.model.WellbeingModel;
 import com.android.launcher3.popup.SystemShortcut;
 import com.android.launcher3.proxy.ProxyActivityStarter;
@@ -75,12 +76,14 @@ public abstract class BaseQuickstepLauncher extends Launcher
     private final ShelfPeekAnim mShelfPeekAnim = new ShelfPeekAnim(this);
 
     private OverviewActionsView mActionsView;
+    protected HotseatPredictionController mHotseatPredictionController;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
         SysUINavigationMode.INSTANCE.get(this).addModeChangeListener(this);
+        addMultiWindowModeChangedListener(mDepthController);
     }
 
     @Override
@@ -303,6 +306,13 @@ public abstract class BaseQuickstepLauncher extends Launcher
 
     public ShelfPeekAnim getShelfPeekAnim() {
         return mShelfPeekAnim;
+    }
+
+    /**
+     * Returns Prediction controller for hybrid hotseat
+     */
+    public HotseatPredictionController getHotseatPredictionController() {
+        return mHotseatPredictionController;
     }
 
     public void setHintUserWillBeActive() {

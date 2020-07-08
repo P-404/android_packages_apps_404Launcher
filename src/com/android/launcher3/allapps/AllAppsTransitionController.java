@@ -14,7 +14,6 @@ import static com.android.launcher3.states.StateAnimationConfig.ANIM_ALL_APPS_FA
 import static com.android.launcher3.states.StateAnimationConfig.ANIM_ALL_APPS_HEADER_FADE;
 import static com.android.launcher3.states.StateAnimationConfig.ANIM_OVERVIEW_SCALE;
 import static com.android.launcher3.states.StateAnimationConfig.ANIM_VERTICAL_PROGRESS;
-import static com.android.launcher3.util.SystemUiController.UI_STATE_ALL_APPS;
 
 import android.animation.Animator;
 import android.animation.AnimatorListenerAdapter;
@@ -37,7 +36,6 @@ import com.android.launcher3.anim.PropertySetter;
 import com.android.launcher3.statemanager.StateManager.StateHandler;
 import com.android.launcher3.states.StateAnimationConfig;
 import com.android.launcher3.uioverrides.plugins.PluginManagerWrapper;
-import com.android.launcher3.util.Themes;
 import com.android.launcher3.views.ScrimView;
 import com.android.systemui.plugins.AllAppsSearchPlugin;
 import com.android.systemui.plugins.PluginListener;
@@ -75,7 +73,6 @@ public class AllAppsTransitionController implements StateHandler<LauncherState>,
     private ScrimView mScrimView;
 
     private final Launcher mLauncher;
-    private final boolean mIsDarkTheme;
     private boolean mIsVerticalLayout;
 
     // Animation in this class is controlled by a single variable {@link mProgress}.
@@ -98,7 +95,6 @@ public class AllAppsTransitionController implements StateHandler<LauncherState>,
         mShiftRange = mLauncher.getDeviceProfile().heightPx;
         mProgress = 1f;
 
-        mIsDarkTheme = Themes.getAttrBoolean(mLauncher, R.attr.isMainColorDark);
         mIsVerticalLayout = mLauncher.getDeviceProfile().isVerticalBarLayout();
         mLauncher.addOnDeviceProfileChangeListener(this);
     }
@@ -137,16 +133,6 @@ public class AllAppsTransitionController implements StateHandler<LauncherState>,
         if (mPlugin != null) {
             mPlugin.setProgress(progress);
         }
-
-        // Use a light system UI (dark icons) if all apps is behind at least half of the
-        // status bar.
-        boolean forceChange = Math.min(shiftCurrent, mScrimView.getVisualTop())
-                <= mLauncher.getDeviceProfile().getInsets().top / 2f;
-        if (forceChange) {
-            mLauncher.getSystemUiController().updateUiState(UI_STATE_ALL_APPS, !mIsDarkTheme);
-        } else {
-            mLauncher.getSystemUiController().updateUiState(UI_STATE_ALL_APPS, 0);
-        }
     }
 
     public float getProgress() {
@@ -173,7 +159,9 @@ public class AllAppsTransitionController implements StateHandler<LauncherState>,
             StateAnimationConfig config, PendingAnimation builder) {
         float targetProgress = toState.getVerticalProgress(mLauncher);
         if (Float.compare(mProgress, targetProgress) == 0) {
-            setAlphas(toState, config, builder);
+            if (!config.onlyPlayAtomicComponent()) {
+                setAlphas(toState, config, builder);
+            }
             // Fail fast
             onProgressAnimationEnd();
             return;
@@ -189,7 +177,6 @@ public class AllAppsTransitionController implements StateHandler<LauncherState>,
                 : FAST_OUT_SLOW_IN;
 
         Animator anim = createSpringAnimation(mProgress, targetProgress);
-        anim.setDuration(config.duration);
         anim.setInterpolator(config.getInterpolator(ANIM_VERTICAL_PROGRESS, interpolator));
         anim.addListener(getProgressAnimatorListener());
         builder.add(anim);

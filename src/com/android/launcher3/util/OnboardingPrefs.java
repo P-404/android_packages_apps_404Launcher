@@ -37,13 +37,15 @@ public class OnboardingPrefs<T extends Launcher> {
     public static final String HOME_BOUNCE_COUNT = "launcher.home_bounce_count";
     public static final String SHELF_BOUNCE_COUNT = "launcher.shelf_bounce_count";
     public static final String ALL_APPS_COUNT = "launcher.all_apps_count";
+    public static final String HOTSEAT_DISCOVERY_TIP_COUNT = "launcher.hotseat_discovery_tip_count";
+    public static final String HOTSEAT_LONGPRESS_TIP_SEEN = "launcher.hotseat_longpress_tip_seen";
 
     /**
      * Events that either have happened or have not (booleans).
      */
     @StringDef(value = {
             HOME_BOUNCE_SEEN,
-            SHELF_BOUNCE_SEEN,
+            SHELF_BOUNCE_SEEN
     })
     @Retention(RetentionPolicy.SOURCE)
     public @interface EventBoolKey {}
@@ -55,6 +57,7 @@ public class OnboardingPrefs<T extends Launcher> {
             HOME_BOUNCE_COUNT,
             SHELF_BOUNCE_COUNT,
             ALL_APPS_COUNT,
+            HOTSEAT_DISCOVERY_TIP_COUNT
     })
     @Retention(RetentionPolicy.SOURCE)
     public @interface EventCountKey {}
@@ -65,6 +68,7 @@ public class OnboardingPrefs<T extends Launcher> {
         maxCounts.put(HOME_BOUNCE_COUNT, 3);
         maxCounts.put(SHELF_BOUNCE_COUNT, 3);
         maxCounts.put(ALL_APPS_COUNT, 5);
+        maxCounts.put(HOTSEAT_DISCOVERY_TIP_COUNT, 5);
         MAX_COUNTS = Collections.unmodifiableMap(maxCounts);
     }
 
@@ -93,6 +97,13 @@ public class OnboardingPrefs<T extends Launcher> {
     /** @return Whether we have seen the given event. */
     public boolean getBoolean(@EventBoolKey String key) {
         return mSharedPrefs.getBoolean(key, false);
+    }
+
+    /**
+     * Marks on-boarding preference boolean at true
+     */
+    public void markChecked(String flag) {
+        mSharedPrefs.edit().putBoolean(flag, true).apply();
     }
 
     /**

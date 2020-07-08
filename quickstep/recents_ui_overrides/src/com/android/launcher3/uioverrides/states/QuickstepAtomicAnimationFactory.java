@@ -24,6 +24,7 @@ import static com.android.launcher3.LauncherState.HOTSEAT_ICONS;
 import static com.android.launcher3.LauncherState.NORMAL;
 import static com.android.launcher3.LauncherState.OVERVIEW;
 import static com.android.launcher3.LauncherState.OVERVIEW_PEEK;
+import static com.android.launcher3.WorkspaceStateTransitionAnimation.getSpringScaleAnimator;
 import static com.android.launcher3.anim.Interpolators.ACCEL;
 import static com.android.launcher3.anim.Interpolators.DEACCEL;
 import static com.android.launcher3.anim.Interpolators.DEACCEL_1_7;
@@ -89,6 +90,10 @@ public class QuickstepAtomicAnimationFactory extends
     private static final int MY_ANIM_COUNT = 2;
     protected static final int NEXT_INDEX = RecentsAtomicAnimationFactory.NEXT_INDEX
             + MY_ANIM_COUNT;
+
+    // Due to use of physics, duration may differ between devices so we need to calculate and
+    // cache the value.
+    private int mHintToNormalDuration = -1;
 
     public static final long ATOMIC_DURATION_FROM_PAUSED_TO_OVERVIEW = 300;
 
@@ -156,6 +161,7 @@ public class QuickstepAtomicAnimationFactory extends
         if (toState == NORMAL && fromState == OVERVIEW) {
             config.setInterpolator(ANIM_WORKSPACE_SCALE, DEACCEL);
             config.setInterpolator(ANIM_WORKSPACE_FADE, ACCEL);
+            config.setInterpolator(ANIM_ALL_APPS_FADE, ACCEL);
             config.setInterpolator(ANIM_OVERVIEW_SCALE, clampToProgress(ACCEL, 0, 0.9f));
             config.setInterpolator(ANIM_OVERVIEW_TRANSLATE_X, ACCEL);
             config.setInterpolator(ANIM_OVERVIEW_FADE, DEACCEL_1_7);
@@ -210,6 +216,7 @@ public class QuickstepAtomicAnimationFactory extends
                 }
             }
             config.setInterpolator(ANIM_WORKSPACE_FADE, OVERSHOOT_1_2);
+            config.setInterpolator(ANIM_ALL_APPS_FADE, OVERSHOOT_1_2);
             config.setInterpolator(ANIM_OVERVIEW_SCALE, OVERSHOOT_1_2);
             config.setInterpolator(ANIM_DEPTH, OVERSHOOT_1_2);
             Interpolator translationInterpolator = ENABLE_OVERVIEW_ACTIONS.get()
@@ -219,6 +226,14 @@ public class QuickstepAtomicAnimationFactory extends
             config.setInterpolator(ANIM_OVERVIEW_TRANSLATE_X, translationInterpolator);
             config.setInterpolator(ANIM_OVERVIEW_TRANSLATE_Y, translationInterpolator);
             config.setInterpolator(ANIM_OVERVIEW_FADE, OVERSHOOT_1_2);
+        } else if (fromState == HINT_STATE && toState == NORMAL) {
+            config.setInterpolator(ANIM_DEPTH, DEACCEL_3);
+            if (mHintToNormalDuration == -1) {
+                ValueAnimator va = getSpringScaleAnimator(mActivity, mActivity.getWorkspace(),
+                        toState.getWorkspaceScaleAndTranslation(mActivity).scale);
+                mHintToNormalDuration = (int) va.getDuration();
+            }
+            config.duration = Math.max(config.duration, mHintToNormalDuration);
         }
     }
 }

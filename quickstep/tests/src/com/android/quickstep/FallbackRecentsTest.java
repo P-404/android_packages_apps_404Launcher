@@ -37,7 +37,6 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
 import android.app.Instrumentation;
-import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.ActivityInfo;
@@ -58,10 +57,8 @@ import com.android.launcher3.testcomponent.TestCommandReceiver;
 import com.android.launcher3.util.Wait;
 import com.android.launcher3.util.rule.FailureRewriterRule;
 import com.android.launcher3.util.rule.FailureWatcher;
-import com.android.quickstep.NavigationModeSwitchRule.NavigationModeSwitch;
 import com.android.quickstep.views.RecentsView;
 
-import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.RuleChain;
@@ -95,7 +92,8 @@ public class FallbackRecentsTest {
         mDevice = UiDevice.getInstance(instrumentation);
         mDevice.setOrientationNatural();
         mLauncher = new LauncherInstrumentation();
-        mLauncher.enableCheckEventsForSuccessfulGestures();
+        // b/143488140
+        //mLauncher.enableCheckEventsForSuccessfulGestures();
 
         if (TestHelpers.isInLauncherProcess()) {
             Utilities.enableRunningInTestHarnessForTests();
@@ -122,6 +120,9 @@ public class FallbackRecentsTest {
                     TestCommandReceiver.callCommand(TestCommandReceiver.DISABLE_TEST_LAUNCHER);
                     UiDevice.getInstance(getInstrumentation()).executeShellCommand(
                             getLauncherCommand(getLauncherInMyProcess()));
+                    // b/143488140
+                    mDevice.pressHome();
+                    mDevice.waitForIdle();
                 }
             }
         };
@@ -130,11 +131,15 @@ public class FallbackRecentsTest {
                     TestCommandReceiver.GET_SYSTEM_HEALTH_MESSAGE, startTime.toString()).
                     getString("result"));
         }
+        // b/143488140
+        mDevice.pressHome();
+        mDevice.waitForIdle();
+        startAppFast(resolveSystemApp(Intent.CATEGORY_APP_CALCULATOR));
     }
 
-    @NavigationModeSwitch
+    // b/143488140
+    //@NavigationModeSwitch
     @Test
-    @Ignore // b/143488140
     public void goToOverviewFromHome() {
         mDevice.pressHome();
         assertTrue("Fallback Launcher not visible", mDevice.wait(Until.hasObject(By.pkg(
@@ -143,9 +148,9 @@ public class FallbackRecentsTest {
         mLauncher.getBackground().switchToOverview();
     }
 
-    @NavigationModeSwitch
+    // b/143488140
+    //@NavigationModeSwitch
     @Test
-    @Ignore // b/143488140
     public void goToOverviewFromApp() {
         startAppFast(resolveSystemApp(Intent.CATEGORY_APP_CALCULATOR));
 
@@ -178,9 +183,9 @@ public class FallbackRecentsTest {
         return mLauncher.getBackground().switchToOverview();
     }
 
-    @NavigationModeSwitch
+    // b/143488140
+    //@NavigationModeSwitch
     @Test
-    @Ignore // b/143488140
     public void testOverview() {
         startAppFast(getAppPackageName());
         startAppFast(resolveSystemApp(Intent.CATEGORY_APP_CALCULATOR));

@@ -22,12 +22,15 @@ import static com.android.launcher3.LauncherSettings.Favorites.CONTAINER_HOTSEAT
 import static com.android.launcher3.LauncherSettings.Favorites.CONTAINER_HOTSEAT_PREDICTION;
 import static com.android.launcher3.LauncherSettings.Favorites.CONTAINER_PREDICTION;
 import static com.android.launcher3.LauncherSettings.Favorites.CONTAINER_SEARCH_RESULTS;
+import static com.android.launcher3.LauncherSettings.Favorites.CONTAINER_SETTINGS;
 import static com.android.launcher3.LauncherSettings.Favorites.CONTAINER_SHORTCUTS;
+import static com.android.launcher3.LauncherSettings.Favorites.CONTAINER_TASKSWITCHER;
 import static com.android.launcher3.LauncherSettings.Favorites.CONTAINER_WIDGETS_TRAY;
 import static com.android.launcher3.LauncherSettings.Favorites.ITEM_TYPE_APPLICATION;
 import static com.android.launcher3.LauncherSettings.Favorites.ITEM_TYPE_APPWIDGET;
 import static com.android.launcher3.LauncherSettings.Favorites.ITEM_TYPE_DEEP_SHORTCUT;
 import static com.android.launcher3.LauncherSettings.Favorites.ITEM_TYPE_SHORTCUT;
+import static com.android.launcher3.LauncherSettings.Favorites.ITEM_TYPE_TASK;
 import static com.android.launcher3.logger.LauncherAtom.ContainerInfo.ContainerCase.CONTAINER_NOT_SET;
 
 import android.content.ComponentName;
@@ -46,7 +49,10 @@ import com.android.launcher3.logger.LauncherAtom.AllAppsContainer;
 import com.android.launcher3.logger.LauncherAtom.ContainerInfo;
 import com.android.launcher3.logger.LauncherAtom.PredictionContainer;
 import com.android.launcher3.logger.LauncherAtom.SearchResultContainer;
+import com.android.launcher3.logger.LauncherAtom.SettingsContainer;
 import com.android.launcher3.logger.LauncherAtom.ShortcutsContainer;
+import com.android.launcher3.logger.LauncherAtom.TaskSwitcherContainer;
+import com.android.launcher3.model.ModelWriter;
 import com.android.launcher3.util.ContentWriter;
 
 import java.util.Optional;
@@ -296,6 +302,12 @@ public class ItemInfo {
                                 .setSpanX(spanX)
                                 .setSpanY(spanY));
                 break;
+            case ITEM_TYPE_TASK:
+                itemBuilder
+                        .setTask(LauncherAtom.Task.newBuilder()
+                                .setComponentName(getTargetComponent().flattenToShortString())
+                                .setIndex(screenId));
+                break;
             default:
                 break;
         }
@@ -335,9 +347,12 @@ public class ItemInfo {
     ContainerInfo getContainerInfo() {
         switch (container) {
             case CONTAINER_HOTSEAT:
-            case CONTAINER_HOTSEAT_PREDICTION:
                 return ContainerInfo.newBuilder()
                         .setHotseat(LauncherAtom.HotseatContainer.newBuilder().setIndex(screenId))
+                        .build();
+            case CONTAINER_HOTSEAT_PREDICTION:
+                return ContainerInfo.newBuilder().setPredictedHotseatContainer(
+                        LauncherAtom.PredictedHotseatContainer.newBuilder().setIndex(screenId))
                         .build();
             case CONTAINER_DESKTOP:
                 return ContainerInfo.newBuilder()
@@ -369,6 +384,15 @@ public class ItemInfo {
                 return ContainerInfo.newBuilder()
                         .setShortcutsContainer(ShortcutsContainer.getDefaultInstance())
                         .build();
+            case CONTAINER_SETTINGS:
+                return ContainerInfo.newBuilder()
+                        .setSettingsContainer(SettingsContainer.getDefaultInstance())
+                        .build();
+            case CONTAINER_TASKSWITCHER:
+                return ContainerInfo.newBuilder()
+                        .setTaskSwitcherContainer(TaskSwitcherContainer.getDefaultInstance())
+                        .build();
+
         }
         return ContainerInfo.getDefaultInstance();
     }
@@ -382,7 +406,10 @@ public class ItemInfo {
         return itemInfo;
     }
 
-    public void setTitle(CharSequence title) {
+    /**
+     * Sets the title of the item and writes to DB model if needed.
+     */
+    public void setTitle(CharSequence title, ModelWriter modelWriter) {
         this.title = title;
     }
 }

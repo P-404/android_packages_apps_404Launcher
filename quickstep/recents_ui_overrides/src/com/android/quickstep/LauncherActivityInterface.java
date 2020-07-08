@@ -118,8 +118,9 @@ public final class LauncherActivityInterface extends
     }
 
     @Override
-    public AnimationFactory prepareRecentsUI(
+    public AnimationFactory prepareRecentsUI(RecentsAnimationDeviceState deviceState,
             boolean activityVisible, Consumer<AnimatorPlaybackController> callback) {
+        notifyRecentsOfOrientation(deviceState);
         DefaultAnimationFactory factory = new DefaultAnimationFactory(callback) {
             @Override
             public void setShelfState(ShelfAnimState shelfState, Interpolator interpolator,

@@ -28,6 +28,9 @@ import static com.android.launcher3.LauncherState.SPRING_LOADED;
 import static com.android.launcher3.config.FeatureFlags.ADAPTIVE_ICON_WINDOW_ANIM;
 import static com.android.launcher3.dragndrop.DragLayer.ALPHA_INDEX_OVERLAY;
 import static com.android.launcher3.logging.LoggerUtils.newContainerTarget;
+import static com.android.launcher3.logging.StatsLogManager.LAUNCHER_STATE_HOME;
+import static com.android.launcher3.logging.StatsLogManager.LauncherEvent.LAUNCHER_SWIPELEFT;
+import static com.android.launcher3.logging.StatsLogManager.LauncherEvent.LAUNCHER_SWIPERIGHT;
 
 import android.animation.Animator;
 import android.animation.AnimatorListenerAdapter;
@@ -79,6 +82,7 @@ import com.android.launcher3.folder.PreviewBackground;
 import com.android.launcher3.graphics.DragPreviewProvider;
 import com.android.launcher3.graphics.PreloadIconDrawable;
 import com.android.launcher3.icons.BitmapRenderer;
+import com.android.launcher3.logger.LauncherAtom;
 import com.android.launcher3.logging.StatsLogManager;
 import com.android.launcher3.logging.StatsLogManager.LauncherEvent;
 import com.android.launcher3.logging.UserEventDispatcher;
@@ -415,14 +419,9 @@ public class Workspace extends PagedView<WorkspacePageIndicator>
 
         // Always enter the spring loaded mode
         mLauncher.getStateManager().goToState(SPRING_LOADED);
-        mStatsLogManager.log(
-                LauncherEvent.LAUNCHER_ITEM_DRAG_STARTED,
-                dragObject.logInstanceId,
-                dragObject.dragSource instanceof Folder
-                        ? dragObject.originalDragInfo
-                                .buildProto(((Folder) dragObject.dragSource).mInfo)
-                        : dragObject.originalDragInfo.buildProto()
-        );
+        mStatsLogManager.logger().withItemInfo(dragObject.dragInfo)
+                .withInstanceId(dragObject.logInstanceId)
+                .log(LauncherEvent.LAUNCHER_ITEM_DRAG_STARTED);
     }
 
     public void deferRemoveExtraEmptyScreen() {
@@ -1004,6 +1003,15 @@ public class Workspace extends PagedView<WorkspacePageIndicator>
             if (!mOverlayShown) {
                 mLauncher.getUserEventDispatcher().logActionOnContainer(Action.Touch.SWIPE,
                         Action.Direction.LEFT, ContainerType.WORKSPACE, 0);
+                mLauncher.getStatsLogManager().logger()
+                        .withSrcState(LAUNCHER_STATE_HOME)
+                        .withDstState(LAUNCHER_STATE_HOME)
+                        .withContainerInfo(LauncherAtom.ContainerInfo.newBuilder()
+                                .setWorkspace(
+                                        LauncherAtom.WorkspaceContainer.newBuilder()
+                                                .setPageIndex(0))
+                                .build())
+                        .log(LAUNCHER_SWIPELEFT);
             }
             mOverlayShown = true;
             // Not announcing the overlay page for accessibility since it announces itself.
@@ -1013,6 +1021,15 @@ public class Workspace extends PagedView<WorkspacePageIndicator>
                 if (!ued.isPreviousHomeGesture()) {
                     mLauncher.getUserEventDispatcher().logActionOnContainer(Action.Touch.SWIPE,
                         Action.Direction.RIGHT, ContainerType.WORKSPACE, -1);
+                    mLauncher.getStatsLogManager().logger()
+                            .withSrcState(LAUNCHER_STATE_HOME)
+                            .withDstState(LAUNCHER_STATE_HOME)
+                            .withContainerInfo(LauncherAtom.ContainerInfo.newBuilder()
+                                    .setWorkspace(
+                                            LauncherAtom.WorkspaceContainer.newBuilder()
+                                                    .setPageIndex(-1))
+                                    .build())
+                            .log(LAUNCHER_SWIPERIGHT);
                 }
             } else if (Float.compare(mOverlayTranslation, 0f) != 0) {
                 // When arriving to 0 overscroll from non-zero overscroll, announce page for
@@ -1104,9 +1121,20 @@ public class Workspace extends PagedView<WorkspacePageIndicator>
     protected void notifyPageSwitchListener(int prevPage) {
         super.notifyPageSwitchListener(prevPage);
         if (prevPage != mCurrentPage) {
-            int swipeDirection = (prevPage < mCurrentPage) ? Action.Direction.RIGHT : Action.Direction.LEFT;
+            int swipeDirection = (prevPage < mCurrentPage)
+                    ? Action.Direction.RIGHT : Action.Direction.LEFT;
+            StatsLogManager.EventEnum event = (prevPage < mCurrentPage)
+                    ? LAUNCHER_SWIPERIGHT : LAUNCHER_SWIPELEFT;
             mLauncher.getUserEventDispatcher().logActionOnContainer(Action.Touch.SWIPE,
                     swipeDirection, ContainerType.WORKSPACE, prevPage);
+            mLauncher.getStatsLogManager().logger()
+                    .withSrcState(LAUNCHER_STATE_HOME)
+                    .withDstState(LAUNCHER_STATE_HOME)
+                    .withContainerInfo(LauncherAtom.ContainerInfo.newBuilder()
+                            .setWorkspace(
+                                    LauncherAtom.WorkspaceContainer.newBuilder()
+                                            .setPageIndex(prevPage)).build())
+                    .log(event);
         }
     }
 
@@ -1342,7 +1370,6 @@ public class Workspace extends PagedView<WorkspacePageIndicator>
 
         ValueAnimator stepAnimator = ValueAnimator.ofFloat(0, 1);
         stepAnimator.addUpdateListener(listener);
-        stepAnimator.setDuration(config.duration);
         stepAnimator.addListener(listener);
         animation.add(stepAnimator);
     }
@@ -1650,10 +1677,8 @@ public class Workspace extends PagedView<WorkspacePageIndicator>
             Rect folderLocation = new Rect();
             float scale = mLauncher.getDragLayer().getDescendantRectRelativeToSelf(v, folderLocation);
             target.removeView(v);
-            mStatsLogManager.log(
-                    LauncherEvent.LAUNCHER_ITEM_DROP_FOLDER_CREATED,
-                    d.logInstanceId,
-                    destInfo.buildProto(null));
+            mStatsLogManager.logger().withItemInfo(destInfo).withInstanceId(d.logInstanceId)
+                    .log(LauncherEvent.LAUNCHER_ITEM_DROP_FOLDER_CREATED);
             FolderIcon fi = mLauncher.addFolder(target, container, screenId, targetCell[0],
                     targetCell[1]);
             destInfo.cellX = -1;
@@ -1691,10 +1716,8 @@ public class Workspace extends PagedView<WorkspacePageIndicator>
         if (dropOverView instanceof FolderIcon) {
             FolderIcon fi = (FolderIcon) dropOverView;
             if (fi.acceptDrop(d.dragInfo)) {
-                mStatsLogManager.log(
-                        LauncherEvent.LAUNCHER_ITEM_DROP_COMPLETED,
-                        d.logInstanceId,
-                        fi.mInfo.buildProto(null));
+                mStatsLogManager.logger().withItemInfo(fi.mInfo).withInstanceId(d.logInstanceId)
+                        .log(LauncherEvent.LAUNCHER_ITEM_DROP_COMPLETED);
                 fi.onDrop(d, false /* itemReturnedOnFailedDrop */);
 
                 // if the drag started here, we need to remove it from the workspace
@@ -1897,10 +1920,8 @@ public class Workspace extends PagedView<WorkspacePageIndicator>
 
             mLauncher.getStateManager().goToState(
                     NORMAL, SPRING_LOADED_EXIT_DELAY, onCompleteRunnable);
-            mStatsLogManager.log(
-                    LauncherEvent.LAUNCHER_ITEM_DROP_COMPLETED,
-                    d.logInstanceId,
-                    d.dragInfo.buildProto(null));
+            mStatsLogManager.logger().withItemInfo(d.dragInfo).withInstanceId(d.logInstanceId)
+                    .log(LauncherEvent.LAUNCHER_ITEM_DROP_COMPLETED);
         }
 
         if (d.stateAnnouncer != null && !droppedOnOriginalCell) {
@@ -2438,10 +2459,9 @@ public class Workspace extends PagedView<WorkspacePageIndicator>
                     // widgets/shortcuts/folders in a slightly different way
                     mLauncher.addPendingItem(pendingInfo, container, screenId, mTargetCell,
                             item.spanX, item.spanY);
-                    mStatsLogManager.log(
-                            LauncherEvent.LAUNCHER_ITEM_DROP_COMPLETED,
-                            d.logInstanceId,
-                            d.dragInfo.buildProto(null));
+                    mStatsLogManager.logger().withItemInfo(d.dragInfo)
+                            .withInstanceId(d.logInstanceId)
+                            .log(LauncherEvent.LAUNCHER_ITEM_DROP_COMPLETED);
                 }
             };
             boolean isWidget = pendingInfo.itemType == LauncherSettings.Favorites.ITEM_TYPE_APPWIDGET
@@ -2530,10 +2550,8 @@ public class Workspace extends PagedView<WorkspacePageIndicator>
                 mLauncher.getDragLayer().animateViewIntoPosition(d.dragView, view, this);
                 resetTransitionTransform();
             }
-            mStatsLogManager.log(
-                    LauncherEvent.LAUNCHER_ITEM_DROP_COMPLETED,
-                    d.logInstanceId,
-                    d.dragInfo.buildProto(null));
+            mStatsLogManager.logger().withItemInfo(d.dragInfo).withInstanceId(d.logInstanceId)
+                    .log(LauncherEvent.LAUNCHER_ITEM_DROP_COMPLETED);
         }
 
     }

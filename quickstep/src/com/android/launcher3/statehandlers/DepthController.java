@@ -20,11 +20,15 @@ import static com.android.launcher3.anim.Interpolators.LINEAR;
 import static com.android.launcher3.states.StateAnimationConfig.ANIM_DEPTH;
 import static com.android.launcher3.states.StateAnimationConfig.SKIP_DEPTH_CONTROLLER;
 
+import android.animation.Animator;
+import android.animation.AnimatorListenerAdapter;
+import android.animation.ObjectAnimator;
 import android.os.IBinder;
 import android.util.FloatProperty;
 import android.view.View;
 import android.view.ViewTreeObserver;
 
+import com.android.launcher3.BaseActivity;
 import com.android.launcher3.Launcher;
 import com.android.launcher3.LauncherState;
 import com.android.launcher3.R;
@@ -32,6 +36,7 @@ import com.android.launcher3.Utilities;
 import com.android.launcher3.anim.PendingAnimation;
 import com.android.launcher3.statemanager.StateManager.StateHandler;
 import com.android.launcher3.states.StateAnimationConfig;
+import com.android.systemui.shared.system.BlurUtils;
 import com.android.systemui.shared.system.RemoteAnimationTargetCompat;
 import com.android.systemui.shared.system.SurfaceControlCompat;
 import com.android.systemui.shared.system.TransactionCompat;
@@ -40,7 +45,8 @@ import com.android.systemui.shared.system.WallpaperManagerCompat;
 /**
  * Controls blur and wallpaper zoom, for the Launcher surface only.
  */
-public class DepthController implements StateHandler<LauncherState> {
+public class DepthController implements StateHandler<LauncherState>,
+        BaseActivity.MultiWindowModeChangedListener {
 
     public static final FloatProperty<DepthController> DEPTH =
             new FloatProperty<DepthController>("depth") {
@@ -103,6 +109,9 @@ public class DepthController implements StateHandler<LauncherState> {
      */
     private float mDepth;
 
+    // Workaround for animating the depth when multiwindow mode changes.
+    private boolean mIgnoreStateChangesDuringMultiWindowAnimation = false;
+
     private View.OnAttachStateChangeListener mOnAttachListener;
 
     public DepthController(Launcher l) {
@@ -110,6 +119,10 @@ public class DepthController implements StateHandler<LauncherState> {
     }
 
     private void ensureDependencies() {
+        if (mWallpaperManager == null) {
+            mMaxBlurRadius = mLauncher.getResources().getInteger(R.integer.max_depth_blur_radius);
+            mWallpaperManager = new WallpaperManagerCompat(mLauncher);
+        }
         if (mLauncher.getRootView() != null && mOnAttachListener == null) {
             mOnAttachListener = new View.OnAttachStateChangeListener() {
                 @Override
@@ -127,11 +140,6 @@ public class DepthController implements StateHandler<LauncherState> {
             };
             mLauncher.getRootView().addOnAttachStateChangeListener(mOnAttachListener);
         }
-        if (mWallpaperManager != null) {
-            return;
-        }
-        mMaxBlurRadius = mLauncher.getResources().getInteger(R.integer.max_depth_blur_radius);
-        mWallpaperManager = new WallpaperManagerCompat(mLauncher);
     }
 
     /**
@@ -171,7 +179,7 @@ public class DepthController implements StateHandler<LauncherState> {
 
     @Override
     public void setState(LauncherState toState) {
-        if (mSurface == null) {
+        if (mSurface == null || mIgnoreStateChangesDuringMultiWindowAnimation) {
             return;
         }
 
@@ -186,7 +194,8 @@ public class DepthController implements StateHandler<LauncherState> {
             PendingAnimation animation) {
         if (mSurface == null
                 || config.onlyPlayAtomicComponent()
-                || config.hasAnimationFlag(SKIP_DEPTH_CONTROLLER)) {
+                || config.hasAnimationFlag(SKIP_DEPTH_CONTROLLER)
+                || mIgnoreStateChangesDuringMultiWindowAnimation) {
             return;
         }
 
@@ -205,7 +214,8 @@ public class DepthController implements StateHandler<LauncherState> {
             return;
         }
 
-        if (mSurface == null || !mSurface.isValid()) {
+        boolean supportsBlur = BlurUtils.supportsBlursOnWindows();
+        if (supportsBlur && (mSurface == null || !mSurface.isValid())) {
             return;
         }
         mDepth = depthF;
@@ -214,17 +224,37 @@ public class DepthController implements StateHandler<LauncherState> {
         if (windowToken != null) {
             mWallpaperManager.setWallpaperZoomOut(windowToken, mDepth);
         }
-        final int blur;
-        if (mLauncher.isInState(LauncherState.ALL_APPS) && mDepth == 1) {
-            // All apps has a solid background. We don't need to draw blurs after it's fully
-            // visible. This will take us out of GPU composition, saving battery and increasing
-            // performance.
-            blur = 0;
-        } else {
-            blur = (int) (mDepth * mMaxBlurRadius);
+
+        if (supportsBlur) {
+            final int blur;
+            if (mLauncher.isInState(LauncherState.ALL_APPS) && mDepth == 1) {
+                // All apps has a solid background. We don't need to draw blurs after it's fully
+                // visible. This will take us out of GPU composition, saving battery and increasing
+                // performance.
+                blur = 0;
+            } else {
+                blur = (int) (mDepth * mMaxBlurRadius);
+            }
+            new TransactionCompat()
+                    .setBackgroundBlurRadius(mSurface, blur)
+                    .apply();
         }
-        new TransactionCompat()
-                .setBackgroundBlurRadius(mSurface, blur)
-                .apply();
+    }
+
+    @Override
+    public void onMultiWindowModeChanged(boolean isInMultiWindowMode) {
+        mIgnoreStateChangesDuringMultiWindowAnimation = true;
+
+        ObjectAnimator mwAnimation = ObjectAnimator.ofFloat(this, DEPTH,
+                mLauncher.getStateManager().getState().getDepth(mLauncher, isInMultiWindowMode))
+                .setDuration(300);
+        mwAnimation.addListener(new AnimatorListenerAdapter() {
+            @Override
+            public void onAnimationEnd(Animator animation) {
+                mIgnoreStateChangesDuringMultiWindowAnimation = false;
+            }
+        });
+        mwAnimation.setAutoCancel(true);
+        mwAnimation.start();
     }
 }

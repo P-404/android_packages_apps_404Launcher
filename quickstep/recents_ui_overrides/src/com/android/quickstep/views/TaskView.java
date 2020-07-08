@@ -30,7 +30,8 @@ import static com.android.launcher3.anim.Interpolators.FAST_OUT_SLOW_IN;
 import static com.android.launcher3.anim.Interpolators.LINEAR;
 import static com.android.launcher3.anim.Interpolators.TOUCH_RESPONSE_INTERPOLATOR;
 import static com.android.launcher3.config.FeatureFlags.ENABLE_QUICKSTEP_LIVE_TILE;
-import static com.android.launcher3.logging.StatsLogManager.LauncherEvent.LAUNCHER_TASK_ICON_TAP_OR_LONGPRESS;
+import static com.android.launcher3.logging.StatsLogManager.LauncherEvent
+        .LAUNCHER_TASK_ICON_TAP_OR_LONGPRESS;
 import static com.android.launcher3.logging.StatsLogManager.LauncherEvent.LAUNCHER_TASK_LAUNCH_TAP;
 
 import android.animation.Animator;
@@ -40,6 +41,7 @@ import android.animation.TimeInterpolator;
 import android.animation.ValueAnimator;
 import android.app.ActivityOptions;
 import android.content.Context;
+import android.content.Intent;
 import android.graphics.Outline;
 import android.graphics.Rect;
 import android.graphics.RectF;
@@ -48,7 +50,6 @@ import android.graphics.drawable.GradientDrawable;
 import android.graphics.drawable.InsetDrawable;
 import android.os.Bundle;
 import android.os.Handler;
-import android.os.Process;
 import android.util.AttributeSet;
 import android.util.FloatProperty;
 import android.util.Log;
@@ -61,13 +62,14 @@ import android.widget.Toast;
 
 import com.android.launcher3.BaseDraggingActivity;
 import com.android.launcher3.DeviceProfile;
+import com.android.launcher3.LauncherSettings;
 import com.android.launcher3.R;
 import com.android.launcher3.Utilities;
 import com.android.launcher3.anim.AnimatorPlaybackController;
 import com.android.launcher3.anim.Interpolators;
 import com.android.launcher3.anim.PendingAnimation;
-import com.android.launcher3.logger.LauncherAtom;
 import com.android.launcher3.logging.UserEventDispatcher;
+import com.android.launcher3.model.data.WorkspaceItemInfo;
 import com.android.launcher3.popup.SystemShortcut;
 import com.android.launcher3.testing.TestLogging;
 import com.android.launcher3.testing.TestProtocol;
@@ -213,7 +215,8 @@ public class TaskView extends FrameLayout implements PageCallbacks, Reusable {
             mActivity.getUserEventDispatcher().logTaskLaunchOrDismiss(
                     Touch.TAP, Direction.NONE, getRecentsView().indexOfChild(this),
                     TaskUtils.getLaunchComponentKeyForTask(getTask().key));
-            mActivity.getStatsLogManager().log(LAUNCHER_TASK_LAUNCH_TAP, buildProto());
+            mActivity.getStatsLogManager().logger().withItemInfo(getItemInfo())
+                    .log(LAUNCHER_TASK_LAUNCH_TAP);
         });
 
         mCurrentFullscreenParams = new FullscreenDrawParams(context);
@@ -223,15 +226,19 @@ public class TaskView extends FrameLayout implements PageCallbacks, Reusable {
         setOutlineProvider(mOutlineProvider);
     }
 
-    /** Builds proto for logging */
-    public LauncherAtom.ItemInfo buildProto() {
+    /**
+     * Builds proto for logging
+     */
+    public WorkspaceItemInfo getItemInfo() {
         ComponentKey componentKey = TaskUtils.getLaunchComponentKeyForTask(getTask().key);
-        LauncherAtom.ItemInfo.Builder itemBuilder = LauncherAtom.ItemInfo.newBuilder();
-        itemBuilder.setIsWork(componentKey.user != Process.myUserHandle());
-        itemBuilder.setTask(LauncherAtom.Task.newBuilder()
-                .setComponentName(componentKey.componentName.flattenToShortString())
-                .setIndex(getRecentsView().indexOfChild(this)));
-        return itemBuilder.build();
+        WorkspaceItemInfo dummyInfo = new WorkspaceItemInfo();
+        dummyInfo.itemType = LauncherSettings.Favorites.ITEM_TYPE_TASK;
+        dummyInfo.container = LauncherSettings.Favorites.CONTAINER_TASKSWITCHER;
+        dummyInfo.user = componentKey.user;
+        dummyInfo.intent = new Intent().setComponent(componentKey.componentName);
+        dummyInfo.title = TaskUtils.getTitle(getContext(), getTask());
+        dummyInfo.screenId = getRecentsView().indexOfChild(this);
+        return dummyInfo;
     }
 
     @Override
@@ -378,6 +385,7 @@ public class TaskView extends FrameLayout implements PageCallbacks, Reusable {
                             }
                         }, resultCallbackHandler);
             }
+            getRecentsView().onTaskLaunched(mTask);
         }
     }
 
@@ -423,13 +431,17 @@ public class TaskView extends FrameLayout implements PageCallbacks, Reusable {
     }
 
     private boolean showTaskMenu(int action) {
-        getRecentsView().snapToPage(getRecentsView().indexOfChild(this));
-        mMenuView = TaskMenuView.showForTask(this);
-        mActivity.getStatsLogManager().log(LAUNCHER_TASK_ICON_TAP_OR_LONGPRESS, buildProto());
-        UserEventDispatcher.newInstance(getContext()).logActionOnItem(action, Direction.NONE,
-                LauncherLogProto.ItemType.TASK_ICON);
-        if (mMenuView != null) {
-            mMenuView.addOnAttachStateChangeListener(mTaskMenuStateListener);
+        if (!getRecentsView().isClearAllHidden()) {
+            getRecentsView().snapToPage(getRecentsView().indexOfChild(this));
+        } else {
+            mMenuView = TaskMenuView.showForTask(this);
+            mActivity.getStatsLogManager().logger().withItemInfo(getItemInfo())
+                    .log(LAUNCHER_TASK_ICON_TAP_OR_LONGPRESS);
+            UserEventDispatcher.newInstance(getContext()).logActionOnItem(action, Direction.NONE,
+                    LauncherLogProto.ItemType.TASK_ICON);
+            if (mMenuView != null) {
+                mMenuView.addOnAttachStateChangeListener(mTaskMenuStateListener);
+            }
         }
         return mMenuView != null;
     }
@@ -535,19 +547,13 @@ public class TaskView extends FrameLayout implements PageCallbacks, Reusable {
         setIconAndDimTransitionProgress(iconScale, invert);
     }
 
-    private void resetViewTransforms() {
+    protected void resetViewTransforms() {
         setCurveScale(1);
         setTranslationX(0f);
         setTranslationY(0f);
         setTranslationZ(0);
         setAlpha(mStableAlpha);
         setIconScaleAndDim(1);
-    }
-
-    public void resetVisualProperties() {
-        resetViewTransforms();
-        setFullscreenProgress(0);
-        setModalness(0);
     }
 
     public void setStableAlpha(float parentAlpha) {
@@ -943,9 +949,6 @@ public class TaskView extends FrameLayout implements PageCallbacks, Reusable {
      */
     public void setFullscreenProgress(float progress) {
         progress = Utilities.boundToRange(progress, 0, 1);
-        if (progress == mFullscreenProgress) {
-            return;
-        }
         mFullscreenProgress = progress;
         boolean isFullscreen = mFullscreenProgress > 0;
         mIconView.setVisibility(progress < 1 ? VISIBLE : INVISIBLE);
@@ -953,11 +956,7 @@ public class TaskView extends FrameLayout implements PageCallbacks, Reusable {
         setClipToPadding(!isFullscreen);
 
         TaskThumbnailView thumbnail = getThumbnail();
-        mCurrentFullscreenParams.setProgress(
-                mFullscreenProgress,
-                getRecentsView().getScaleX(),
-                getWidth(), mActivity.getDeviceProfile(),
-                thumbnail.getPreviewPositionHelper());
+        updateCurrentFullscreenParams(thumbnail.getPreviewPositionHelper());
 
         if (!getRecentsView().isTaskIconScaledDown(this)) {
             // Some of the items in here are dependent on the current fullscreen params, but don't
@@ -968,6 +967,17 @@ public class TaskView extends FrameLayout implements PageCallbacks, Reusable {
         thumbnail.setFullscreenParams(mCurrentFullscreenParams);
         mOutlineProvider.setFullscreenParams(mCurrentFullscreenParams);
         invalidateOutline();
+    }
+
+    void updateCurrentFullscreenParams(PreviewPositionHelper previewPositionHelper) {
+        if (getRecentsView() == null) {
+            return;
+        }
+        mCurrentFullscreenParams.setProgress(
+                mFullscreenProgress,
+                getRecentsView().getScaleX(),
+                getWidth(), mActivity.getDeviceProfile(),
+                previewPositionHelper);
     }
 
     public boolean isRunningTask() {
@@ -1010,10 +1020,6 @@ public class TaskView extends FrameLayout implements PageCallbacks, Reusable {
             mWindowCornerRadius = QuickStepContract.getWindowCornerRadius(context.getResources());
 
             mCurrentDrawnCornerRadius = mCornerRadius;
-        }
-
-        public FullscreenDrawParams() {
-            mCurrentDrawnCornerRadius = mWindowCornerRadius =  mCornerRadius = 0;
         }
 
         /**
