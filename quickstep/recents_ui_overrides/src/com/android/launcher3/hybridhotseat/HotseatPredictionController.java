@@ -113,8 +113,6 @@ public class HotseatPredictionController implements DragController.DragListener,
     private AllAppsStore mAllAppsStore;
     private AnimatorSet mIconRemoveAnimators;
     private boolean mUIUpdatePaused = false;
-    private boolean mRequiresCacheUpdate = true;
-    private boolean mIsCacheEmpty;
     private boolean mIsDestroyed = false;
 
 
@@ -155,14 +153,6 @@ public class HotseatPredictionController implements DragController.DragListener,
     }
 
     /**
-     * Returns whether or not user has seen hybrid hotseat education
-     */
-    public boolean isEduSeen() {
-        return mLauncher.getSharedPrefs().getBoolean(HotseatEduController.KEY_HOTSEAT_EDU_SEEN,
-                false);
-    }
-
-    /**
      * Shows appropriate hotseat education based on prediction enabled and migration states.
      */
     public void showEdu() {
@@ -172,7 +162,7 @@ public class HotseatPredictionController implements DragController.DragListener,
                 Snackbar.show(mLauncher, R.string.hotsaet_tip_prediction_disabled,
                         R.string.hotseat_prediction_settings, null,
                         () -> mLauncher.startActivity(getSettingsIntent()));
-            } else if (isEduSeen() || getPredictedIcons().size() >= (mHotSeatItemsCount + 1) / 2) {
+            } else if (getPredictedIcons().size() >= (mHotSeatItemsCount + 1) / 2) {
                 showDiscoveryTip();
             } else {
                 HotseatEduController eduController = new HotseatEduController(mLauncher,
@@ -358,7 +348,6 @@ public class HotseatPredictionController implements DragController.DragListener,
             fillGapsWithPrediction();
             return;
         }
-        mIsCacheEmpty = apps.isEmpty();
         int count = Math.min(ranks.size(), apps.size());
         List<WorkspaceItemInfo> items = new ArrayList<>(count);
         for (int i = 0; i < count; i++) {
@@ -401,14 +390,7 @@ public class HotseatPredictionController implements DragController.DragListener,
         }
         updateDependencies();
         fillGapsWithPrediction();
-        cachePredictionComponentKeysIfNecessary(componentKeys);
-    }
-
-    private void cachePredictionComponentKeysIfNecessary(ArrayList<ComponentKey> componentKeys) {
-        if (!mRequiresCacheUpdate && componentKeys.isEmpty() == mIsCacheEmpty) return;
         mPredictionModel.cachePredictionComponentKeys(componentKeys);
-        mIsCacheEmpty = componentKeys.isEmpty();
-        mRequiresCacheUpdate = false;
     }
 
     private void updateDependencies() {
@@ -437,7 +419,6 @@ public class HotseatPredictionController implements DragController.DragListener,
             notifyItemAction(mPredictionModel.wrapAppTargetWithLocation(appTarget,
                     AppTargetEvent.ACTION_PIN, workspaceItemInfo));
         }
-        mRequiresCacheUpdate = true;
     }
 
     private List<WorkspaceItemInfo> mapToWorkspaceItemInfo(
@@ -591,7 +572,6 @@ public class HotseatPredictionController implements DragController.DragListener,
         }
         mDragObject = null;
         fillGapsWithPrediction(true, this::removeOutlineDrawings);
-        mRequiresCacheUpdate = true;
     }
 
 
@@ -663,11 +643,15 @@ public class HotseatPredictionController implements DragController.DragListener,
                             + ",launchLocation:" + itemInfo.container);
         }
 
-        final ComponentKey k = new ComponentKey(itemInfo.getTargetComponent(), itemInfo.user);
+        if (itemInfo.getTargetComponent() == null || itemInfo.user == null) {
+            return;
+        }
+
+        final ComponentKey key = new ComponentKey(itemInfo.getTargetComponent(), itemInfo.user);
 
         final List<ComponentKeyMapper> predictedApps = new ArrayList<>(mComponentKeyMappers);
         OptionalInt rank = IntStream.range(0, predictedApps.size())
-                .filter((i) -> k.equals(predictedApps.get(i).getComponentKey()))
+                .filter(index -> key.equals(predictedApps.get(index).getComponentKey()))
                 .findFirst();
         if (!rank.isPresent()) {
             return;
