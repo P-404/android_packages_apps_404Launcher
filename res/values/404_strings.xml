@@ -40,9 +40,4 @@
     <string name="settings_edit_allow_summary_off">Icons and widgets can\'t be added, removed and moved on the homescreen</string>
     <string name="settings_edit_widgets_error">It\'s not possible to add widgets to the home screen</string>
 
-    <!-- Icon packs -->
-    <string name="iconPackPackageDefault" translatable="false">""</string>
-    <string name="icon_pack">Icon pack</string>
-    <string name="icon_pack_summary">Select a custom icon pack</string>
-
 </resources>

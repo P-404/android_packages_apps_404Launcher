@@ -49,7 +49,6 @@ import androidx.annotation.Nullable;
 import androidx.annotation.VisibleForTesting;
 
 import com.android.launcher3.graphics.IconShape;
-import com.android.launcher3.icons.IconPackProvider;
 import com.android.launcher3.util.ConfigMonitor;
 import com.android.launcher3.util.DefaultDisplay;
 import com.android.launcher3.util.DefaultDisplay.Info;
@@ -111,7 +110,6 @@ public class InvariantDeviceProfile implements OnSharedPreferenceChangeListener 
     public int numFolderColumns;
     public float iconSize;
     public String iconShapePath;
-    public String iconPack;
     public float landscapeIconSize;
     public int iconBitmapSize;
     public int fillResIconDpi;
@@ -157,7 +155,6 @@ public class InvariantDeviceProfile implements OnSharedPreferenceChangeListener 
         numFolderColumns = p.numFolderColumns;
         iconSize = p.iconSize;
         iconShapePath = p.iconShapePath;
-        iconPack = p.iconPack;
         landscapeIconSize = p.landscapeIconSize;
         iconBitmapSize = p.iconBitmapSize;
         iconTextSize = p.iconTextSize;
@@ -280,7 +277,6 @@ public class InvariantDeviceProfile implements OnSharedPreferenceChangeListener 
 
         iconSize = displayOption.iconSize;
         iconShapePath = getIconShapePath(context);
-        iconPack = IconPackProvider.getCurrentIconPack(context);
         landscapeIconSize = displayOption.landscapeIconSize;
         iconBitmapSize = ResourceUtils.pxFromDp(iconSize, displayInfo.metrics);
         iconTextSize = displayOption.iconTextSize;
@@ -380,7 +376,7 @@ public class InvariantDeviceProfile implements OnSharedPreferenceChangeListener 
         }
 
         if (iconSize != oldProfile.iconSize || iconBitmapSize != oldProfile.iconBitmapSize ||
-                !iconShapePath.equals(oldProfile.iconShapePath) || !iconPack.equals(oldProfile.iconPack)) {
+                !iconShapePath.equals(oldProfile.iconShapePath)) {
             changeFlags |= CHANGE_FLAG_ICON_PARAMS;
         }
         if (!iconShapePath.equals(oldProfile.iconShapePath)) {
