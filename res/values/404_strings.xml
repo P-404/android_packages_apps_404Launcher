@@ -33,12 +33,6 @@
     <string name="desktop_show_labels">Show icon labels on desktop</string>
     <string name="drawer_show_labels">Show icon labels in drawer</string>
 
-    <!-- Edit workspace -->
-    <string name="settings_edit_allow_title">Allow edit</string>
-    <string name="settings_edit_allow_summary_on">Icons and widgets can be added, removed and moved on the homescreen</string>
-    <string name="settings_edit_allow_summary_off">Icons and widgets can\'t be added, removed and moved on the homescreen</string>
-    <string name="settings_edit_widgets_error">It\'s not possible to add widgets to the home screen</string>
-
     <!-- AppInfo -->
     <string name="app_info_subtext" translatable="false">Swipe down to close app info.</string>
     <string name="app_info_version_value" translatable="false">%1$s (%2$d)</string>
