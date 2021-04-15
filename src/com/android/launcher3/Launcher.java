@@ -18,6 +18,7 @@ package com.android.launcher3;
 
 import static android.content.pm.ActivityInfo.CONFIG_ORIENTATION;
 import static android.content.pm.ActivityInfo.CONFIG_SCREEN_SIZE;
+import static android.content.pm.ActivityInfo.CONFIG_UI_MODE;
 import static android.view.accessibility.AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED;
 
 import static com.android.launcher3.AbstractFloatingView.TYPE_ALL;
@@ -1104,7 +1105,11 @@ public class Launcher extends StatefulActivity<LauncherState> implements Launche
         int stateOrdinal = savedState.getInt(RUNTIME_STATE, NORMAL.ordinal);
         LauncherState[] stateValues = LauncherState.values();
         LauncherState state = stateValues[stateOrdinal];
-        if (!state.shouldDisableRestore()) {
+
+        NonConfigInstance lastInstance = (NonConfigInstance) getLastNonConfigurationInstance();
+        boolean forceRestore = lastInstance != null
+                && (lastInstance.config.diff(mOldConfig) & CONFIG_UI_MODE) != 0;
+        if (forceRestore || !state.shouldDisableRestore()) {
             mStateManager.goToState(state, false /* animated */);
         }
 
@@ -1342,6 +1347,13 @@ public class Launcher extends StatefulActivity<LauncherState> implements Launche
         super.onDetachedFromWindow();
         mOverlayManager.onDetachedFromWindow();
         closeContextMenu();
+    }
+
+    @Override
+    public Object onRetainNonConfigurationInstance() {
+        NonConfigInstance instance = new NonConfigInstance();
+        instance.config = new Configuration(mOldConfig);
+        return instance;
     }
 
     public AllAppsTransitionController getAllAppsController() {
@@ -1945,7 +1957,6 @@ public class Launcher extends StatefulActivity<LauncherState> implements Launche
         return result;
     }
 
-    @Override
     public void addOnResumeCallback(OnResumeCallback callback) {
         mOnResumeCallbacks.add(callback);
     }
@@ -2746,5 +2757,9 @@ public class Launcher extends StatefulActivity<LauncherState> implements Launche
     public interface OnResumeCallback {
 
         void onLauncherResume();
+    }
+
+    private static class NonConfigInstance {
+        public Configuration config;
     }
 }
