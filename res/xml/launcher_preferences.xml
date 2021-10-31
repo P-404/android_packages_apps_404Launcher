@@ -63,7 +63,7 @@
         android:defaultValue="true"
         android:persistent="true"/>
 
-    <androidx.preference.PreferenceScreen
+    <Preference
         android:key="pref_developer_options"
         android:persistent="false"
         android:title="@string/developer_options_title"
