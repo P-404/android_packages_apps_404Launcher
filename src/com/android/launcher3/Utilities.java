@@ -172,6 +172,7 @@ public final class Utilities {
     public static final String GSA_PACKAGE = "com.google.android.googlequicksearchbox";
     public static final String LENS_ACTIVITY = "com.google.android.apps.lens.MainActivity";
     public static final String LENS_URI = "google://lens";
+    public static final String KEY_DOCK_SEARCH = "pref_dock_search";
 
     /**
      * Returns true if theme is dark.
@@ -975,21 +976,20 @@ public final class Utilities {
         return prefs.getBoolean(KEY_SMARTSPACE, true);
     }
 
-    public static void restart(final Context context) {
-        MODEL_EXECUTOR.execute(() -> {
-            try {
-                Thread.sleep(WAIT_BEFORE_RESTART);
-            } catch (Exception ignored) {
-            }
-            android.os.Process.killProcess(android.os.Process.myPid());
-        });
-    }
-
     public static boolean isGSAEnabled(Context context) {
         try {
             return context.getPackageManager().getApplicationInfo(GSA_PACKAGE, 0).enabled;
         } catch (PackageManager.NameNotFoundException e) {
             return false;
         }
+    }
+
+    public static boolean showQSB(Context context) {
+        return isGSAEnabled(context) && isQSBEnabled(context);
+    }
+
+    private static boolean isQSBEnabled(Context context) {
+        SharedPreferences prefs = getPrefs(context.getApplicationContext());
+        return prefs.getBoolean(KEY_DOCK_SEARCH, true);
     }
 }
