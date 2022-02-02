@@ -161,6 +161,7 @@ public final class Utilities {
     public static final String GSA_PACKAGE = "com.google.android.googlequicksearchbox";
     public static final String LENS_ACTIVITY = "com.google.android.apps.lens.MainActivity";
     public static final String LENS_URI = "google://lens";
+    public static final String KEY_DOCK_SEARCH = "pref_dock_search";
 
     /**
      * Returns true if theme is dark.
@@ -976,5 +977,14 @@ public final class Utilities {
         } catch (PackageManager.NameNotFoundException e) {
             return false;
         }
+    }
+
+    public static boolean showQSB(Context context) {
+        return isGSAEnabled(context) && isQSBEnabled(context);
+    }
+
+    private static boolean isQSBEnabled(Context context) {
+        SharedPreferences prefs = getPrefs(context.getApplicationContext());
+        return prefs.getBoolean(KEY_DOCK_SEARCH, true);
     }
 }
