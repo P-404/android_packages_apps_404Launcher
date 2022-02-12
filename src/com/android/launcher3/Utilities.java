@@ -170,7 +170,8 @@ public final class Utilities {
         });
     }
     public static final String GSA_PACKAGE = "com.google.android.googlequicksearchbox";
-    public static final String LENS_ACTIVITY = "com.google.android.apps.gsa.staticplugins.lens.LensActivity";
+    public static final String LENS_ACTIVITY = "com.google.android.apps.lens.MainActivity";
+    public static final String LENS_URI = "google://lens";
 
     /**
      * Returns true if theme is dark.
