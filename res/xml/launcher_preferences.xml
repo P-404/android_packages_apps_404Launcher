@@ -50,6 +50,11 @@
         launcher:logIdOn="615"
         launcher:logIdOff="616" />
 
+    <SwitchPreference
+        android:key="pref_allow_phone_taskbar"
+        android:title="@string/pref_allow_phone_taskbar"
+        android:summary="@string/pref_allow_phone_taskbar_desc" />
+
     <androidx.preference.PreferenceScreen
         android:key="pref_developer_options"
         android:persistent="false"
