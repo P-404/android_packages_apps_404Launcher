@@ -133,4 +133,9 @@
         </androidx.preference.PreferenceScreen>
     </PreferenceCategory>
 
+    <SwitchPreference
+        android:key="pref_allow_phone_taskbar"
+        android:title="@string/pref_allow_phone_taskbar"
+        android:summary="@string/pref_allow_phone_taskbar_desc" />
+
 </androidx.preference.PreferenceScreen>
