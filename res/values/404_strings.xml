@@ -30,4 +30,6 @@
     <string name="msg_minus_one_on_right">When you swipe right from main Home screen</string>
     <string name="pref_show_google_now_summary" translatable="false">@string/msg_minus_one_on_left</string>
 
+    <string name="pref_allow_phone_taskbar">Use taskbar</string>
+    <string name="pref_allow_phone_taskbar_desc">For opening and switching apps anywhere</string>
 </resources>

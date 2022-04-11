@@ -42,7 +42,8 @@ import android.util.SparseArray;
 import android.util.TypedValue;
 import android.util.Xml;
 import android.view.Display;
-
+import android.content.SharedPreferences;
+import android.content.SharedPreferences.OnSharedPreferenceChangeListener;
 import androidx.annotation.IntDef;
 import androidx.annotation.Nullable;
 import androidx.annotation.VisibleForTesting;
@@ -59,6 +60,7 @@ import com.android.launcher3.util.MainThreadInitializedObject;
 import com.android.launcher3.util.Themes;
 import com.android.launcher3.util.WindowBounds;
 import com.android.launcher3.util.window.WindowManagerProxy;
+import com.android.quickstep.SystemUiProxy;
 
 import org.xmlpull.v1.XmlPullParser;
 import org.xmlpull.v1.XmlPullParserException;
@@ -71,7 +73,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
-public class InvariantDeviceProfile {
+public class InvariantDeviceProfile implements OnSharedPreferenceChangeListener {
 
     public static final String TAG = "IDP";
     // We do not need any synchronization for this variable as its only written on UI thread.
@@ -186,6 +188,8 @@ public class InvariantDeviceProfile {
     public Point defaultWallpaperSize;
     public Rect defaultWidgetPadding;
 
+    private Context mContext;
+
     private final ArrayList<OnIDPChangeListener> mChangeListeners = new ArrayList<>();
 
     @VisibleForTesting
@@ -193,10 +197,14 @@ public class InvariantDeviceProfile {
 
     @TargetApi(23)
     private InvariantDeviceProfile(Context context) {
+        mContext = context;
+
+        SharedPreferences prefs = Utilities.getPrefs(context);
+        prefs.registerOnSharedPreferenceChangeListener(this);
         String gridName = getCurrentGridName(context);
         String newGridName = initGrid(context, gridName);
         if (!newGridName.equals(gridName)) {
-            Utilities.getPrefs(context).edit().putString(KEY_IDP_GRID_NAME, newGridName).apply();
+            prefs.edit().putString(KEY_IDP_GRID_NAME, newGridName).apply();
         }
         new DeviceGridState(this).writeToPrefs(context);
 
@@ -430,6 +438,17 @@ public class InvariantDeviceProfile {
         mChangeListeners.remove(listener);
     }
 
+    @Override
+    public void onSharedPreferenceChanged(SharedPreferences prefs, String key) {
+        if (DeviceProfile.KEY_PHONE_TASKBAR.equals(key)) {
+            // Create the illusion of this taking effect immediately
+            // Also needed because TaskbarManager inits before SystemUiProxy on start
+            boolean enabled = Utilities.getPrefs(mContext).getBoolean(DeviceProfile.KEY_PHONE_TASKBAR, false);
+            SystemUiProxy.INSTANCE.get(mContext).setTaskbarEnabled(enabled);
+
+            onConfigChanged(mContext, true);
+        }
+    }
 
     public void setCurrentGrid(Context context, String gridName) {
         Context appContext = context.getApplicationContext();
@@ -444,6 +463,10 @@ public class InvariantDeviceProfile {
     }
 
     private void onConfigChanged(Context context) {
+        onConfigChanged(context, false);
+    }
+
+    private void onConfigChanged(Context context, boolean taskbarChanged) {
         Object[] oldState = toModelState();
 
         // Re-init grid
@@ -452,7 +475,7 @@ public class InvariantDeviceProfile {
 
         boolean modelPropsChanged = !Arrays.equals(oldState, toModelState());
         for (OnIDPChangeListener listener : mChangeListeners) {
-            listener.onIdpChanged(modelPropsChanged);
+            listener.onIdpChanged(modelPropsChanged, taskbarChanged);
         }
     }
 
@@ -707,7 +730,7 @@ public class InvariantDeviceProfile {
         /**
          * Called when the device provide changes
          */
-        void onIdpChanged(boolean modelPropertiesChanged);
+        void onIdpChanged(boolean modelPropertiesChanged, boolean taskbarChanged);
     }
 
 
