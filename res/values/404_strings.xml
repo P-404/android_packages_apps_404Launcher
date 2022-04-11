@@ -75,4 +75,6 @@
     <string name="google_home_category_title">GOOGLE NOW</string>
     <string name="icon_category_title">ICONS CUSTOMIZATION</string>
 
+    <string name="pref_allow_phone_taskbar">Use taskbar</string>
+    <string name="pref_allow_phone_taskbar_desc">For opening and switching apps anywhere</string>
 </resources>
