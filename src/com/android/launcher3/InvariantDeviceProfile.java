@@ -49,6 +49,7 @@ import androidx.annotation.IntDef;
 import androidx.annotation.Nullable;
 import androidx.annotation.VisibleForTesting;
 
+import com.android.launcher3.p404.icon.IconPackStore;
 import com.android.launcher3.model.DeviceGridState;
 import com.android.launcher3.provider.RestoreDbTask;
 import com.android.launcher3.util.DisplayController;
@@ -125,6 +126,7 @@ public class InvariantDeviceProfile implements OnSharedPreferenceChangeListener 
     public int numFolderColumns;
     public float[] iconSize;
     public float[] iconTextSize;
+    public String iconPack;
     public int iconBitmapSize;
     public int fillResIconDpi;
     public @DeviceType int deviceType;
@@ -322,6 +324,7 @@ public class InvariantDeviceProfile implements OnSharedPreferenceChangeListener 
             case KEY_SHOW_DRAWER_LABELS:
             case KEY_ICON_SIZE:
             case KEY_FONT_SIZE:
+            case IconPackStore.KEY_ICON_PACK:
                 onConfigChanged(mContext);
                 break;
         }
@@ -368,6 +371,7 @@ public class InvariantDeviceProfile implements OnSharedPreferenceChangeListener 
         for (int i = 1; i < iconSize.length; i++) {
             maxIconSize = Math.max(maxIconSize, iconSize[i]);
         }
+        iconPack = new IconPackStore(context).getCurrent();
         iconBitmapSize = ResourceUtils.pxFromDp(maxIconSize, metrics);
         fillResIconDpi = getLauncherIconDensity(iconBitmapSize);
 
@@ -457,7 +461,7 @@ public class InvariantDeviceProfile implements OnSharedPreferenceChangeListener 
     private Object[] toModelState() {
         return new Object[]{
                 numColumns, numRows, numSearchContainerColumns, numDatabaseHotseatIcons,
-                iconBitmapSize, fillResIconDpi, numDatabaseAllAppsColumns, dbFile};
+                iconPack, iconBitmapSize, fillResIconDpi, numDatabaseAllAppsColumns, dbFile};
     }
 
     private void onConfigChanged(Context context) {
