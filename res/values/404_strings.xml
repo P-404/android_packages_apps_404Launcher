@@ -67,4 +67,7 @@
     <!-- Font size -->
     <string name="font_size_title">Font size</string>
 
+    <!-- Top shadow -->
+    <string name="show_top_shadow">Top shadow</string>
+
 </resources>
