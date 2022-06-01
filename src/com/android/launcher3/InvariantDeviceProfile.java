@@ -204,20 +204,6 @@ public class InvariantDeviceProfile implements SharedPreferences.OnSharedPrefere
         Utilities.getPrefs(context).registerOnSharedPreferenceChangeListener(this);
     }
 
-    @Override
-    public void onSharedPreferenceChanged(SharedPreferences sharedPreferences, String key) {
-        if (DeviceProfile.KEY_PHONE_TASKBAR.equals(key)) {
-            // Create the illusion of this taking effect immediately
-            // Also needed because TaskbarManager inits before SystemUiProxy on start
-            boolean enabled = Utilities.getPrefs(mContext).getBoolean(DeviceProfile.KEY_PHONE_TASKBAR, false);
-            SystemUiProxy.INSTANCE.get(mContext).setTaskbarEnabled(enabled);
-
-            onConfigChanged(mContext, true);
-        } else if (DeviceProfile.KEY_PHONE_OVERVIEW_GRID.equals(key)) {
-            onConfigChanged(mContext, false);
-        }
-    }
-
     /**
      * This constructor should NOT have any monitors by design.
      */
@@ -312,7 +298,16 @@ public class InvariantDeviceProfile implements SharedPreferences.OnSharedPrefere
             case KEY_SHOW_DRAWER_LABELS:
             case KEY_ICON_SIZE:
             case KEY_FONT_SIZE:
+            case DeviceProfile.KEY_PHONE_OVERVIEW_GRID:
                 onConfigChanged(mContext);
+                break;
+            case DeviceProfile.KEY_PHONE_TASKBAR:
+                // Create the illusion of this taking effect immediately
+                // Also needed because TaskbarManager inits before SystemUiProxy on start
+                boolean enabled = Utilities.getPrefs(mContext).getBoolean(DeviceProfile.KEY_PHONE_TASKBAR, false);
+                SystemUiProxy.INSTANCE.get(mContext).setTaskbarEnabled(enabled);
+
+                onConfigChanged(mContext, true);
                 break;
         }
     }
