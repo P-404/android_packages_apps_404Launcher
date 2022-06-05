@@ -38,6 +38,7 @@
             android:layout_height="wrap_content"
             android:drawableStart="@drawable/ic_screenshot"
             android:text="@string/action_screenshot"
+	    android:visibility="gone"
             android:theme="@style/ThemeControlHighlightWorkspaceColor" />
 
         <Space
@@ -55,17 +56,12 @@
             android:theme="@style/ThemeControlHighlightWorkspaceColor"
             android:visibility="gone" />
 
-        <Space
-            android:layout_width="0dp"
-            android:layout_height="1dp"
-            android:layout_weight="1" />
-
         <Button
             android:id="@+id/action_clear_all"
             style="@style/OverviewActionButton"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:drawableStart="@drawable/ic_clear_all"
+	    android:background="@drawable/bg_overview_clear_all_button"
             android:text="@string/recents_clear_all"
             android:theme="@style/ThemeControlHighlightWorkspaceColor" />
 
