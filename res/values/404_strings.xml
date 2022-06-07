@@ -72,7 +72,6 @@
     <string name="font_size_title">Font size</string>
 
     <!-- Settings Categories -->
-    <string name="developer_category_title">DEVELOPER OPTIONS</string>
     <string name="general_category_title">GENERAL CUSTOMIZATION</string>
     <string name="google_home_category_title">GOOGLE NOW</string>
     <string name="icon_category_title">ICONS CUSTOMIZATION</string>

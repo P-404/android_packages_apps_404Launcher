@@ -127,15 +127,4 @@
         </androidx.preference.PreferenceScreen>
     </PreferenceCategory>
 
-    <PreferenceCategory
-        android:key="developer_category"
-        android:title="@string/developer_category_title">
-
-        <Preference
-            android:key="pref_developer_options"
-            android:persistent="false"
-            android:title="Developer Options"
-            android:fragment="com.android.launcher3.settings.DeveloperOptionsFragment"/>
-    </PreferenceCategory>
-
 </androidx.preference.PreferenceScreen>
