@@ -276,10 +276,15 @@ public class InvariantDeviceProfile implements OnSharedPreferenceChangeListener 
         iconShapePath = getIconShapePath(context);
         landscapeIconSize = displayOption.landscapeIconSize * iconSizeModifier;
         iconBitmapSize = ResourceUtils.pxFromDp(iconSize, displayInfo.metrics);
-        iconTextSize = displayOption.iconTextSize * iconSizeModifier;
         fillResIconDpi = getLauncherIconDensity(iconBitmapSize);
         allAppsIconSize = iconSize * iconSizeModifier;
-        allAppsIconTextSize = iconTextSize * iconSizeModifier;
+        if (iconSizeModifier <= 1.00F) {
+            iconTextSize = displayOption.iconTextSize * iconSizeModifier;
+            allAppsIconTextSize = iconTextSize * iconSizeModifier;
+        } else {
+            iconTextSize = displayOption.iconTextSize;
+            allAppsIconTextSize = iconTextSize;
+        }
 
         // If the partner customization apk contains any grid overrides, apply them
         // Supported overrides: numRows, numColumns, iconSize
