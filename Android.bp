@@ -17,7 +17,7 @@ package {
     default_applicable_licenses: ["Android-Apache-2.0"],
 }
 
-min_launcher3_sdk_version = "26"
+min_launcher3_sdk_version = "31"
 
 android_library {
     name: "launcher-aosp-tapl",
@@ -114,6 +114,8 @@ android_library {
         "iconloader_base",
         "libGoogleFeed",
         "SettingsLib",
+        "bcsmartspace-google",
+        "SystemUIPluginLib",
     ],
     manifest: "AndroidManifest-common.xml",
     sdk_version: "current",
