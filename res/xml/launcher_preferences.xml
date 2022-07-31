@@ -51,6 +51,12 @@
         launcher:logIdOff="616" />
 
     <SwitchPreference
+        android:key="pref_smartspace"
+        android:title="@string/smartspace_pref_title"
+        android:summary="@string/smartspace_pref_summary"
+        android:defaultValue="true" />
+
+    <SwitchPreference
         android:key="pref_allow_phone_taskbar"
         android:title="@string/pref_allow_phone_taskbar"
         android:summary="@string/pref_allow_phone_taskbar_desc" />
