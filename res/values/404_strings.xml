@@ -70,4 +70,9 @@
     <!-- Top shadow -->
     <string name="show_top_shadow">Top shadow</string>
 
+    <!-- Settings Categories -->
+    <string name="general_category_title">GENERAL CUSTOMIZATION</string>
+    <string name="google_home_category_title">GOOGLE NOW</string>
+    <string name="icon_category_title">ICONS CUSTOMIZATION</string>
+
 </resources>
