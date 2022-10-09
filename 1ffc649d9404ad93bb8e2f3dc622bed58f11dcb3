@@ -1,0 +1,38 @@
+{
+  "comments": [
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "8c3f9e3f_39ae4e0a",
+        "filename": "src/com/android/launcher3/InvariantDeviceProfile.java",
+        "patchSetId": 1
+      },
+      "lineNbr": 200,
+      "author": {
+        "id": 1000001
+      },
+      "writtenOn": "2022-10-09T06:23:01Z",
+      "side": 1,
+      "message": "duplicate declaration in 197",
+      "revId": "1ffc649d9404ad93bb8e2f3dc622bed58f11dcb3",
+      "serverId": "c85314f7-38ff-4b73-93db-2637f3516207"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "17a34fb8_05813743",
+        "filename": "src/com/android/launcher3/InvariantDeviceProfile.java",
+        "patchSetId": 1
+      },
+      "lineNbr": 231,
+      "author": {
+        "id": 1000001
+      },
+      "writtenOn": "2022-10-09T06:23:01Z",
+      "side": 1,
+      "message": "moved it in switch case soon pushing",
+      "revId": "1ffc649d9404ad93bb8e2f3dc622bed58f11dcb3",
+      "serverId": "c85314f7-38ff-4b73-93db-2637f3516207"
+    }
+  ]
+}
