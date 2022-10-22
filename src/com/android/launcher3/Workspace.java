@@ -117,6 +117,7 @@ import com.android.launcher3.widget.WidgetManagerHelper;
 import com.android.launcher3.widget.dragndrop.AppWidgetHostViewDragListener;
 import com.android.launcher3.widget.util.WidgetSizes;
 import com.android.systemui.plugins.shared.LauncherOverlayManager.LauncherOverlay;
+import com.android.launcher3.pageindicators.PageIndicatorDots;
 
 import java.util.ArrayList;
 import java.util.Iterator;
