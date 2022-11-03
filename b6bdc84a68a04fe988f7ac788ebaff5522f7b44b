@@ -16,6 +16,23 @@
       "message": "Cleanup needed",
       "revId": "b6bdc84a68a04fe988f7ac788ebaff5522f7b44b",
       "serverId": "c85314f7-38ff-4b73-93db-2637f3516207"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "bdd35603_dbf24a2e",
+        "filename": "src/com/android/launcher3/pageindicators/PageIndicatorDots.java",
+        "patchSetId": 2
+      },
+      "lineNbr": 133,
+      "author": {
+        "id": 1000006
+      },
+      "writtenOn": "2022-11-03T09:48:52Z",
+      "side": 1,
+      "message": "Spaces",
+      "revId": "b6bdc84a68a04fe988f7ac788ebaff5522f7b44b",
+      "serverId": "c85314f7-38ff-4b73-93db-2637f3516207"
     }
   ]
 }
