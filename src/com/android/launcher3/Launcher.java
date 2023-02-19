@@ -369,7 +369,7 @@ public class Launcher extends StatefulActivity<LauncherState>
     // Request id for any pending activity result
     protected int mPendingActivityRequestCode = -1;
 
-    public ViewGroupFocusHelper mFocusHandler;
+    private ViewGroupFocusHelper mFocusHandler;
 
     private RotationHelper mRotationHelper;
 
@@ -1114,7 +1114,7 @@ public class Launcher extends StatefulActivity<LauncherState>
             mWorkspace.setClipChildren(false);
         }
         // When multiple pages are visible, show persistent page indicator
- 	// mWorkspace.getPageIndicator().setShouldAutoHide(!state.hasFlag(FLAG_MULTI_PAGE));
+        mWorkspace.getPageIndicator().setShouldAutoHide(!state.hasFlag(FLAG_MULTI_PAGE));
 
         mPrevLauncherState = mStateManager.getCurrentStableState();
         if (mPrevLauncherState != state && ALL_APPS.equals(state)
@@ -3287,7 +3287,7 @@ public class Launcher extends StatefulActivity<LauncherState>
 
     /** Resumes view updates at the end of the app launch animation. */
     public void resumeExpensiveViewUpdates() {
-//        getWorkspace().getPageIndicator().skipAnimationsToEnd();
+        getWorkspace().getPageIndicator().skipAnimationsToEnd();
 
         getWorkspace().mapOverItems((info, view) -> {
             if (view instanceof LauncherAppWidgetHostView) {

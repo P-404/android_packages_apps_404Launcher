@@ -42,18 +42,12 @@ import com.android.launcher3.R;
 import com.android.launcher3.Utilities;
 import com.android.launcher3.anim.Interpolators;
 import com.android.launcher3.util.Themes;
-import com.android.launcher3.Launcher;
-import com.android.launcher3.DeviceProfile;
-import com.android.launcher3.Insettable;
-import android.widget.FrameLayout;
-import android.graphics.Rect;
-import android.view.Gravity;
 
 /**
  * {@link PageIndicator} which shows dots per page. The active page is shown with the current
  * accent color.
  */
-public class PageIndicatorDots extends View implements PageIndicator, Insettable {
+public class PageIndicatorDots extends View implements PageIndicator {
 
     private static final float SHIFT_PER_ANIMATION = 0.5f;
     private static final float SHIFT_THRESHOLD = 0.1f;
@@ -118,7 +112,6 @@ public class PageIndicatorDots extends View implements PageIndicator, Insettable
 
     private float[] mEntryAnimationRadiusFactors;
 
-    private final Launcher mLauncher;
     public PageIndicatorDots(Context context) {
         this(context, null);
     }
@@ -155,28 +148,9 @@ public class PageIndicatorDots extends View implements PageIndicator, Insettable
             setOutlineProvider(new MyOutlineProver());
         }
         mIsRtl = Utilities.isRtl(getResources());
-	mLauncher = Launcher.getLauncher(context);
     }
 
     @Override
-    public void setInsets(Rect insets){
-	DeviceProfile grid = mLauncher.getDeviceProfile();
-	FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) getLayoutParams();
-	
-	if(grid.isVerticalBarLayout()) {
-    	  Rect padding = grid.workspacePadding;
-	  lp.leftMargin = padding.left + grid.workspaceCellPaddingXPx;
-          lp.rightMargin = padding.right + grid.workspaceCellPaddingXPx;
-	  lp.bottomMargin = padding.bottom;
-        } else {
-	  lp.leftMargin = lp.rightMargin = 0;
-	  lp.gravity = Gravity.CENTER_HORIZONTAL | Gravity.BOTTOM;
-	  lp.bottomMargin = grid.hotseatBarSizePx + insets.bottom;
- 	}
-	setLayoutParams(lp);
-    }
-
-   @Override
     public void setScroll(int currentScroll, int totalScroll) {
         if (mNumPages <= 1) {
             mCurrentScroll = 0;
